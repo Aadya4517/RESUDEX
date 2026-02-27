@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Resudex – AI Resume Ranker</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+
+    <h1>Resudex</h1>
+    <p class="subtitle">AI Resume Intelligence Platform</p>
+
+    <div class="upload-card">
+        <form id="uploadForm">
+            <input type="file" id="resumes" multiple required>
+            <textarea id="jobDescription" placeholder="Paste Job Description..." required></textarea>
+            <button type="submit">Analyze Resumes</button>
+        </form>
+    </div>
+
+    <div id="loading" class="loading hidden">Analyzing resumes...</div>
+
+    <div id="results" class="results-container"></div>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

@@ -18,6 +18,7 @@ public class ResumeController {
     ) {
 
         Set<String> jobSkills = SkillExtractor.extractSkills(jobDescription);
+        Set<String> mandatorySkills = MandatorySkillExtractor.extractMandatorySkills(jobDescription);
 
         List<ResumeScore> results = new ArrayList<>();
 
@@ -27,16 +28,31 @@ public class ResumeController {
 
             Set<String> resumeSkills = SkillExtractor.extractSkills(resumeText);
 
-            int score = ScoreCalculator.calculateSkillScore(resumeSkills, jobSkills);
+            int skillScore = ScoreCalculator.calculateSkillScore(resumeSkills, jobSkills);
 
-            Set<String> matched = new HashSet<>(resumeSkills);
-            matched.retainAll(jobSkills);
+            int experienceYears = ExperienceExtractor.extractYears(resumeText);
 
-            results.add(new ResumeScore(file.getOriginalFilename(), score, matched));
+            Set<String> matchedSkills = new HashSet<>(resumeSkills);
+            matchedSkills.retainAll(jobSkills);
+
+            int finalScore = FinalScoreCalculator.calculateFinalScore(
+                    skillScore,
+                    experienceYears,
+                    mandatorySkills,
+                    resumeSkills
+            );
+
+            results.add(
+                    new ResumeScore(
+                            file.getOriginalFilename(),
+                            finalScore,
+                            experienceYears,
+                            matchedSkills
+                    )
+            );
         }
 
-        results.sort((a, b) -> Integer.compare(b.getScore(), a.getScore()));
-
+        results.sort((a, b) -> Integer.compare(b.getFinalScore(), a.getFinalScore()));
         return results;
     }
 }

@@ -5,12 +5,14 @@ import java.util.Set;
 public class ResumeScore {
 
     private String fileName;
-    private int score;
+    private int finalScore;
+    private int experienceYears;
     private Set<String> matchedSkills;
 
-    public ResumeScore(String fileName, int score, Set<String> matchedSkills) {
+    public ResumeScore(String fileName, int finalScore, int experienceYears, Set<String> matchedSkills) {
         this.fileName = fileName;
-        this.score = score;
+        this.finalScore = finalScore;
+        this.experienceYears = experienceYears;
         this.matchedSkills = matchedSkills;
     }
 
@@ -18,8 +20,12 @@ public class ResumeScore {
         return fileName;
     }
 
-    public int getScore() {
-        return score;
+    public int getFinalScore() {
+        return finalScore;
+    }
+
+    public int getExperienceYears() {
+        return experienceYears;
     }
 
     public Set<String> getMatchedSkills() {
