@@ -1,58 +1,60 @@
 package com.resudex.controller;
 
 import com.resudex.model.ResumeScore;
-import com.resudex.util.*;
+import com.resudex.model.ResumeScorer;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 @RestController
 @RequestMapping("/api")
+@CrossOrigin
 public class ResumeController {
 
+    private final ResumeScorer scorer = new ResumeScorer();
+
     @PostMapping("/uploadMultiple")
-    public List<ResumeScore> uploadMultipleResumes(
-            @RequestParam("files") List<MultipartFile> files,
+    public Map<String, Object> uploadMultiple(
+            @RequestParam("files") MultipartFile[] files,
             @RequestParam("jobDescription") String jobDescription
-    ) {
+    ) throws Exception {
 
-        Set<String> jobSkills = SkillExtractor.extractSkills(jobDescription);
-        Set<String> mandatorySkills = MandatorySkillExtractor.extractMandatorySkills(jobDescription);
-
-        List<ResumeScore> results = new ArrayList<>();
+        List<ResumeScore> scores = new ArrayList<>();
 
         for (MultipartFile file : files) {
+            String text = new String(file.getBytes(), StandardCharsets.UTF_8);
 
-            String resumeText = ResumeTextExtractor.extractText(file);
-
-            Set<String> resumeSkills = SkillExtractor.extractSkills(resumeText);
-
-            int skillScore = ScoreCalculator.calculateSkillScore(resumeSkills, jobSkills);
-
-            int experienceYears = ExperienceExtractor.extractYears(resumeText);
-
-            Set<String> matchedSkills = new HashSet<>(resumeSkills);
-            matchedSkills.retainAll(jobSkills);
-
-            int finalScore = FinalScoreCalculator.calculateFinalScore(
-                    skillScore,
-                    experienceYears,
-                    mandatorySkills,
-                    resumeSkills
+            ResumeScore score = scorer.scoreResume(
+                    file.getOriginalFilename(),
+                    text,
+                    jobDescription
             );
 
-            results.add(
-                    new ResumeScore(
-                            file.getOriginalFilename(),
-                            finalScore,
-                            experienceYears,
-                            matchedSkills
-                    )
-            );
+            scores.add(score);
         }
 
-        results.sort((a, b) -> Integer.compare(b.getFinalScore(), a.getFinalScore()));
-        return results;
+        scores.sort((a, b) -> b.getFinalScore() - a.getFinalScore());
+
+        double avg = scores.stream()
+                .mapToInt(ResumeScore::getFinalScore)
+                .average()
+                .orElse(0);
+
+        int highest = scores.isEmpty() ? 0 : scores.get(0).getFinalScore();
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("totalResumes", scores.size());
+        response.put("averageScore", avg);
+        response.put("highestScore", highest);
+        response.put("rankedResumes", scores);
+
+        return response;
+    }
+
+    @GetMapping("/health")
+    public String health() {
+        return "Resudex backend is running";
     }
 }
