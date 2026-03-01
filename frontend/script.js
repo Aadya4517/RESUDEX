@@ -120,6 +120,12 @@ function renderResults(resumes) {
             <strong>Missing Skills:</strong><br>
             ${r.missingSkills.join(", ")}
         </div>
+        <div class="roadmap">
+    <strong>Learning Roadmap:</strong>
+    <ul>
+        ${r.learningRoadmap.map(item => `<li>${item}</li>`).join("")}
+    </ul>
+</div>
     </div>
 
     <h4>Domain Fit</h4>
@@ -196,6 +202,16 @@ function buildPdfReport(data) {
                     <td>${r.missingSkills.join(", ")}</td>
                 </tr>
             `).join("")}
+
+            .roadmap {
+    margin-top: 10px;
+    font-size: 13px;
+}
+
+.roadmap li {
+    margin-left: 18px;
+    opacity: 0.9;
+}
         </table>
     </body>
     </html>

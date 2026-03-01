@@ -301,3 +301,12 @@ form {
     background: #f1f5f9;
     font-weight: 600;
 }
+.roadmap {
+    margin-top: 10px;
+    font-size: 13px;
+}
+
+.roadmap li {
+    margin-left: 18px;
+    opacity: 0.9;
+}

@@ -95,16 +95,24 @@ for (String skill : jdSkills) {
         missingSkills.add(skill);
     }
 }
+        int totalRequiredSkills = mandatorySkills.size();
+        int matchedRequiredSkills = matchedSkills.size();
 
-        finalScore += Math.min(40, matchedSkills.size() * 3);
+        double skillScore = totalRequiredSkills == 0? 0: ((double) matchedRequiredSkills / totalRequiredSkills) * 50;
 
-        if (experienceYears >= 3) finalScore += 20;
-        else if (experienceYears >= 1) finalScore += 10;
+        double experienceScore;
+        if (experienceYears >= 3) experienceScore = 30;
+        else if (experienceYears >= 1) experienceScore = 15;
+        else experienceScore = 5;
 
-        finalScore -= missingMandatorySkills.size() * 5;
+double completenessScore = 20; // fixed for now (resume parsed successfully)
 
-        finalScore = Math.max(0, Math.min(finalScore, 100));
+finalScore = (int) Math.round(
+        skillScore + experienceScore + completenessScore
+);
 
+finalScore = Math.max(0, Math.min(finalScore, 100));
+        
         if (experienceYears > 0)
             rankSummary.add("Has " + experienceYears + " years of experience");
 
@@ -119,10 +127,21 @@ for (String skill : jdSkills) {
         else if (missingMandatorySkills.size() > 2) priority = SkillGapPriority.MEDIUM;
         else priority = SkillGapPriority.LOW;
 
-        List<String> learningRoadmap = missingSkills.stream()
-                .limit(5)
-                .map(skill -> "Learn " + skill)
-                .toList();
+        List<String> learningRoadmap = new ArrayList<>();
+
+for (String skill : missingMandatorySkills) {
+    learningRoadmap.add("Mandatory: Learn " + skill);
+}
+
+for (String skill : missingSkills) {
+    if (!missingMandatorySkills.contains(skill)) {
+        learningRoadmap.add("Optional: Learn " + skill);
+    }
+}
+
+learningRoadmap = learningRoadmap.stream()
+        .limit(6)
+        .toList();
 
         return new ResumeScore(
                 fileName,
