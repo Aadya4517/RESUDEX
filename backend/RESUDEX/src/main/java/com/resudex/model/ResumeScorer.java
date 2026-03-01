@@ -4,44 +4,43 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import com.resudex.model.SkillGapPriority;
 
 public class ResumeScorer {
 
     private static final Map<String, Set<String>> DOMAIN_SKILLS = Map.of(
+            "Java Backend", Set.of(
+                    "java","spring","spring boot","hibernate","jpa",
+                    "jdbc","maven","gradle","rest","microservices"
+            ),
+            "Web Development", Set.of(
+                    "html","css","javascript","react","angular",
+                    "vue","bootstrap","tailwind","node"
+            ),
+            "Python", Set.of(
+                    "python","django","flask","fastapi",
+                    "numpy","pandas","scikit-learn"
+            ),
+            "C / C++", Set.of(
+                    "c","c++","stl","pointers",
+                    "data structures","memory management"
+            ),
+            "DevOps", Set.of(
+                    "docker","kubernetes","aws","azure",
+                    "gcp","ci/cd","jenkins","linux"
+            ),
+            "Databases", Set.of(
+                    "mysql","postgresql","mongodb","redis","sql"
+            ),
+            "Mobile Development", Set.of(
+                    "android","kotlin","swift","flutter","react native"
+            )
+    );
 
-        "Java Backend", Set.of(
-            "java","spring","spring boot","hibernate","jpa",
-            "jdbc","maven","gradle","rest","microservices"
-        ),
-
-        "Web Development", Set.of(
-            "html","css","javascript","react","angular",
-            "vue","bootstrap","tailwind","node"
-        ),
-
-        "Python", Set.of(
-            "python","django","flask","fastapi",
-            "numpy","pandas","scikit-learn"
-        ),
-
-        "C / C++", Set.of(
-            "c","c++","stl","pointers",
-            "data structures","memory management"
-        ),
-
-        "DevOps", Set.of(
-            "docker","kubernetes","aws","azure",
-            "gcp","ci/cd","jenkins","linux"
-        ),
-
-        "Databases", Set.of(
-            "mysql","postgresql","mongodb","redis","sql"
-        ),
-
-        "Mobile Development", Set.of(
-            "android","kotlin","swift","flutter","react native"
-        )
+    private static final Map<String, Set<String>> ROLE_SKILLS = Map.of(
+            "Backend Developer", Set.of("java","spring","sql","rest","microservices"),
+            "Full Stack Developer", Set.of("java","spring","react","javascript","sql"),
+            "Data Engineer", Set.of("python","sql","pandas","spark"),
+            "DevOps Engineer", Set.of("docker","kubernetes","aws","ci/cd")
     );
 
     public ResumeScore scoreResume(
@@ -60,88 +59,85 @@ public class ResumeScorer {
         Set<String> mandatorySkills = extractMandatorySkills(jobDescription);
         Set<String> missingMandatorySkills = new HashSet<>();
 
-        Map<String, Integer> domainFit = new HashMap<>();
-        Map<String, Integer> roleFit = new HashMap<>();
+        Map<String, Integer> domainFit = new LinkedHashMap<>();
+        Map<String, Integer> roleFit = new LinkedHashMap<>();
         List<String> rankSummary = new ArrayList<>();
 
-        int finalScore = 0;
-
+        /* ---------- DOMAIN FIT ---------- */
         for (Map.Entry<String, Set<String>> entry : DOMAIN_SKILLS.entrySet()) {
             String domain = entry.getKey();
             Set<String> skills = entry.getValue();
 
-            Set<String> matched = skills.stream()
+            long matched = skills.stream()
                     .filter(resumeText::contains)
-                    .collect(Collectors.toSet());
+                    .count();
 
-            matchedSkills.addAll(matched);
-
-            int fitPercent = (int) ((matched.size() * 100.0) / skills.size());
+            int fitPercent = (int) ((matched * 100.0) / skills.size());
             domainFit.put(domain, fitPercent);
+
+            skills.stream()
+                    .filter(resumeText::contains)
+                    .forEach(matchedSkills::add);
         }
 
+        /* ---------- ROLE FIT ---------- */
+        for (Map.Entry<String, Set<String>> entry : ROLE_SKILLS.entrySet()) {
+            String role = entry.getKey();
+            Set<String> skills = entry.getValue();
+
+            long matched = skills.stream()
+                    .filter(resumeText::contains)
+                    .count();
+
+            int fitPercent = (int) ((matched * 100.0) / skills.size());
+            roleFit.put(role, fitPercent);
+        }
+
+        /* ---------- SKILL GAP ---------- */
         for (String skill : mandatorySkills) {
             if (!resumeText.contains(skill)) {
                 missingMandatorySkills.add(skill);
+                missingSkills.add(skill);
+            } else {
+                matchedSkills.add(skill);
             }
         }
 
-        Set<String> jdSkills = extractMandatorySkills(jobDescription);
+        /* ---------- SCORING (ONLY ONE LOGIC) ---------- */
+        int skillScore = Math.min(50, matchedSkills.size() * 4);
 
-for (String skill : jdSkills) {
-    if (resumeText.contains(skill)) {
-        matchedSkills.add(skill);
-    } else {
-        missingSkills.add(skill);
-    }
-}
-        int totalRequiredSkills = mandatorySkills.size();
-        int matchedRequiredSkills = matchedSkills.size();
+        int experienceScore;
+        if (experienceYears >= 5) experienceScore = 25;
+        else if (experienceYears >= 3) experienceScore = 18;
+        else if (experienceYears >= 1) experienceScore = 10;
+        else experienceScore = 0;
 
-        double skillScore = totalRequiredSkills == 0? 0: ((double) matchedRequiredSkills / totalRequiredSkills) * 50;
+        int domainScore = domainFit.values()
+                .stream()
+                .max(Integer::compareTo)
+                .orElse(0) / 4;
 
-        double experienceScore;
-        if (experienceYears >= 3) experienceScore = 30;
-        else if (experienceYears >= 1) experienceScore = 15;
-        else experienceScore = 5;
+        int penalty = missingMandatorySkills.size() * 8;
 
-double completenessScore = 20; // fixed for now (resume parsed successfully)
+        int finalScore = skillScore + experienceScore + domainScore - penalty;
+        finalScore = Math.max(0, Math.min(finalScore, 100));
 
-finalScore = (int) Math.round(
-        skillScore + experienceScore + completenessScore
-);
+        /* ---------- SUMMARY ---------- */
+        rankSummary.add("Matched " + matchedSkills.size() + " relevant skills");
+        rankSummary.add("Experience: " + experienceYears + " years");
+        rankSummary.add("Missing mandatory skills: " + missingMandatorySkills.size());
 
-finalScore = Math.max(0, Math.min(finalScore, 100));
-        
-        if (experienceYears > 0)
-            rankSummary.add("Has " + experienceYears + " years of experience");
-
-        if (!matchedSkills.isEmpty())
-            rankSummary.add("Matched " + matchedSkills.size() + " relevant skills");
-
-        if (!missingMandatorySkills.isEmpty())
-            rankSummary.add("Missing mandatory skills: " + missingMandatorySkills.size());
-
+        /* ---------- SKILL GAP PRIORITY ---------- */
         SkillGapPriority priority;
-        if (missingMandatorySkills.size() > 5) priority = SkillGapPriority.HIGH;
-        else if (missingMandatorySkills.size() > 2) priority = SkillGapPriority.MEDIUM;
+        if (missingMandatorySkills.size() >= 5) priority = SkillGapPriority.HIGH;
+        else if (missingMandatorySkills.size() >= 3) priority = SkillGapPriority.MEDIUM;
         else priority = SkillGapPriority.LOW;
 
-        List<String> learningRoadmap = new ArrayList<>();
-
-for (String skill : missingMandatorySkills) {
-    learningRoadmap.add("Mandatory: Learn " + skill);
-}
-
-for (String skill : missingSkills) {
-    if (!missingMandatorySkills.contains(skill)) {
-        learningRoadmap.add("Optional: Learn " + skill);
-    }
-}
-
-learningRoadmap = learningRoadmap.stream()
-        .limit(6)
-        .toList();
+        /* ---------- LEARNING ROADMAP ---------- */
+        List<String> learningRoadmap = missingMandatorySkills.stream()
+                .limit(6)
+                .map(skill -> "Mandatory: Learn " + skill)
+                .collect(Collectors.toList());
 
         return new ResumeScore(
                 fileName,
@@ -150,7 +146,7 @@ learningRoadmap = learningRoadmap.stream()
                 matchedSkills,
                 missingSkills,
                 missingMandatorySkills,
-                "Score calculated using skills, experience and job relevance",
+                "Score derived from skill match, experience, domain fit and penalties",
                 100,
                 Set.of(),
                 priority,
@@ -161,6 +157,7 @@ learningRoadmap = learningRoadmap.stream()
         );
     }
 
+    /* ---------- EXPERIENCE EXTRACTION ---------- */
     private int extractExperienceYears(String text) {
         Pattern p = Pattern.compile("(\\d+)\\s*(years?|yrs?|months?)");
         Matcher m = p.matcher(text);
@@ -179,6 +176,7 @@ learningRoadmap = learningRoadmap.stream()
         return months / 12;
     }
 
+    /* ---------- JD SKILL EXTRACTION ---------- */
     private Set<String> extractMandatorySkills(String jobDescription) {
         Set<String> mandatory = new HashSet<>();
 

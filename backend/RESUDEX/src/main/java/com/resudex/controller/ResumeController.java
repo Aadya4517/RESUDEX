@@ -2,10 +2,13 @@ package com.resudex.controller;
 
 import com.resudex.model.ResumeScore;
 import com.resudex.model.ResumeScorer;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.nio.charset.StandardCharsets;
+import java.io.InputStream;
 import java.util.*;
 
 @RestController
@@ -24,11 +27,13 @@ public class ResumeController {
         List<ResumeScore> scores = new ArrayList<>();
 
         for (MultipartFile file : files) {
-            String text = new String(file.getBytes(), StandardCharsets.UTF_8);
+            if (file.isEmpty()) continue;
+
+            String resumeText = extractTextFromFile(file);
 
             ResumeScore score = scorer.scoreResume(
                     file.getOriginalFilename(),
-                    text,
+                    resumeText,
                     jobDescription
             );
 
@@ -51,6 +56,28 @@ public class ResumeController {
         response.put("rankedResumes", scores);
 
         return response;
+    }
+
+    private String extractTextFromFile(MultipartFile file) throws Exception {
+
+        String fileName = file.getOriginalFilename().toLowerCase();
+
+        if (fileName.endsWith(".pdf")) {
+            try (PDDocument document = PDDocument.load(file.getInputStream())) {
+                return new PDFTextStripper().getText(document);
+            }
+        }
+
+        if (fileName.endsWith(".docx")) {
+            try (InputStream is = file.getInputStream()) {
+                XWPFDocument doc = new XWPFDocument(is);
+                StringBuilder text = new StringBuilder();
+                doc.getParagraphs().forEach(p -> text.append(p.getText()).append(" "));
+                return text.toString();
+            }
+        }
+
+        return "";
     }
 
     @GetMapping("/health")
