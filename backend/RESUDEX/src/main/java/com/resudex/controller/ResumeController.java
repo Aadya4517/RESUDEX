@@ -69,8 +69,8 @@ public class ResumeController {
         }
 
         if (fileName.endsWith(".docx")) {
-            try (InputStream is = file.getInputStream()) {
-                XWPFDocument doc = new XWPFDocument(is);
+            try (InputStream is = file.getInputStream();
+                 XWPFDocument doc = new XWPFDocument(is)) {
                 StringBuilder text = new StringBuilder();
                 doc.getParagraphs().forEach(p -> text.append(p.getText()).append(" "));
                 return text.toString();

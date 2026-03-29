@@ -74,10 +74,6 @@ public class ResumeScorer {
 
             int fitPercent = (int) ((matched * 100.0) / skills.size());
             domainFit.put(domain, fitPercent);
-
-            skills.stream()
-                    .filter(resumeText::contains)
-                    .forEach(matchedSkills::add);
         }
 
         /* ---------- ROLE FIT ---------- */
