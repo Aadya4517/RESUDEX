@@ -34,6 +34,7 @@ interface Applicant {
   missingSkills: string[];
   techScore: number;
   application_id: number;
+  status: string;
 }
 
 export default function AdminDashboard() {
@@ -42,6 +43,11 @@ export default function AdminDashboard() {
   const [applicants, setApplicants] = useState<Applicant[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"jobs" | "applicants">("jobs");
+  const [activeNoteApp, setActiveNoteApp] = useState<number | null>(null);
+  const [noteText, setNoteText] = useState("");
+  const [candidateNotes, setCandidateNotes] = useState<any[]>([]);
+
+  const KANBAN_STAGES = ["APPLIED", "SCREENING", "INTERVIEWING", "OFFERED", "REJECTED"];
 
   useEffect(() => {
     fetchJobs();
@@ -67,10 +73,54 @@ export default function AdminDashboard() {
     try {
       await axios.post(`http://localhost:8080/api/applicants/${appId}/select`);
       alert("Candidate Shortlisted! Notification sent.");
-      // Refresh list
       if (selectedJob) fetchApplicants(selectedJob.id);
     } catch (e) {}
   };
+
+  const handleDragStart = (e: React.DragEvent, appId: number) => {
+    e.dataTransfer.setData("appId", appId.toString());
+  };
+
+  const handleDrop = async (e: React.DragEvent, newStatus: string) => {
+    e.preventDefault();
+    const appIdStr = e.dataTransfer.getData("appId");
+    if (!appIdStr) return;
+    const appId = parseInt(appIdStr);
+    
+    setApplicants(prev => prev.map(app => app.application_id === appId ? { ...app, status: newStatus } : app));
+    
+    try {
+      await axios.put(`http://localhost:8080/api/applications/${appId}/status`, { status: newStatus });
+    } catch (err) {}
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const viewNotes = async (userId: number, appId: number) => {
+    if (activeNoteApp === appId) {
+      setActiveNoteApp(null);
+      return;
+    }
+    setActiveNoteApp(appId);
+    try {
+      const res = await axios.get(`http://localhost:8080/api/users/${userId}/notes`);
+      setCandidateNotes(res.data);
+    } catch (e) {}
+  };
+
+  const submitNote = async (userId: number) => {
+    if (!noteText.trim()) return;
+    try {
+      await axios.post(`http://localhost:8080/api/users/${userId}/notes`, { note: noteText });
+      setNoteText("");
+      // Refresh notes
+      const res = await axios.get(`http://localhost:8080/api/users/${userId}/notes`);
+      setCandidateNotes(res.data);
+    } catch (e) {}
+  };
+
 
   return (
     <div className="flex min-h-screen bg-[#060012] text-white">
@@ -146,49 +196,98 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              <div className="space-y-4">
-                {applicants.map((app, idx) => (
-                  <GlassCard key={app.id} className="flex items-center gap-8 relative p-8 border-indigo-500/5 hover:border-indigo-500/30">
-                    <div className="absolute top-0 right-0 p-6">
-                      <MatchBadge score={app.score} />
+              <div className="flex gap-6 overflow-x-auto pb-8 h-[calc(100vh-250px)]">
+                {KANBAN_STAGES.map((stage) => (
+                  <div 
+                    key={stage} 
+                    className="flex-shrink-0 w-[400px] bg-white/5 border border-white/5 rounded-2xl flex flex-col"
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, stage)}
+                  >
+                    <div className="p-4 border-b border-white/10 flex justify-between items-center bg-black/20 rounded-t-2xl">
+                      <h4 className="font-bold text-slate-300 tracking-wider text-sm">{stage}</h4>
+                      <span className="text-xs bg-white/10 px-2 py-0.5 rounded-full font-black text-slate-400">
+                        {applicants.filter(a => (a.status || 'APPLIED').toUpperCase() === stage).length}
+                      </span>
                     </div>
 
-                    <div className="w-16 h-16 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center text-2xl font-black border border-white/20">
-                      {app.full_name?.charAt(0) || app.username.charAt(0)}
-                    </div>
+                    <div className="flex-1 p-4 space-y-4 overflow-y-auto">
+                      {applicants
+                        .filter(a => (a.status || 'APPLIED').toUpperCase() === stage)
+                        .map(app => (
+                        <div 
+                          key={app.id} 
+                          draggable 
+                          onDragStart={(e) => handleDragStart(e, app.application_id)}
+                          className="bg-[#0D0221] border border-indigo-500/10 p-5 rounded-xl cursor-grab active:cursor-grabbing hover:border-indigo-500/40 transition-colors relative"
+                        >
+                          <div className="absolute top-4 right-4">
+                            <MatchBadge score={app.score} />
+                          </div>
+                          
+                          <h5 className="font-black text-lg mb-1">{app.full_name || app.username}</h5>
+                          {app.techScore > 70 && <span className="bg-yellow-500/10 text-yellow-500 text-[10px] font-black px-2 py-0.5 rounded-md border border-yellow-500/20 mb-2 inline-block">TOP TECH SCORE</span>}
+                          
+                          <div className="flex flex-wrap gap-1 mt-2 mb-4">
+                            {app.matchedSkills.slice(0, 3).map(skill => (
+                              <span key={skill} className="text-[9px] font-bold px-2 py-0.5 bg-indigo-500/10 text-indigo-300 rounded uppercase">{skill}</span>
+                            ))}
+                          </div>
 
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-1">
-                        <h4 className="text-xl font-black tracking-tight">{app.full_name || app.username}</h4>
-                        {app.techScore > 70 && <span className="bg-yellow-500/10 text-yellow-500 text-[10px] font-black px-2 py-0.5 rounded-md border border-yellow-500/20 shadow-[0_0_10px_rgba(234,179,8,0.2)]">TOP SCORE</span>}
-                      </div>
-                      <div className="flex flex-wrap gap-2 mt-3">
-                        {app.matchedSkills.slice(0, 4).map(skill => (
-                          <span key={skill} className="text-[10px] font-black px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20 uppercase tracking-widest">{skill}</span>
-                        ))}
-                      </div>
-                    </div>
+                          <div className="flex gap-2 mt-4 pt-4 border-t border-white/5">
+                             <button
+                               onClick={() => window.open(`http://localhost:8080/api/resume/export/${app.id}`)}
+                               className="flex-1 py-2 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 rounded text-[10px] font-black tracking-widest transition-colors"
+                             >
+                               PDF EXPORT
+                             </button>
+                             <button 
+                               onClick={() => viewNotes(app.id, app.application_id)}
+                               className="flex-1 py-2 bg-white/5 hover:bg-white/10 text-slate-300 rounded text-[10px] font-black tracking-widest transition-colors"
+                             >
+                               {activeNoteApp === app.application_id ? "HIDE NOTES" : "NOTES"}
+                             </button>
+                          </div>
 
-                    <div className="flex gap-4">
-                       <button 
-                        onClick={() => selectCandidate(app.application_id)}
-                        className="bg-indigo-600 hover:bg-indigo-500 px-8 py-3 rounded-xl font-black text-xs tracking-widest transition-all shadow-[0_0_15px_rgba(79,70,229,0.3)]"
-                       >
-                         SHORTLIST
-                       </button>
-                       <button className="p-3 border border-indigo-500/20 rounded-xl hover:bg-white/5 text-slate-400">
-                         <Mail size={20}/>
-                       </button>
+                          {/* Recruiter Notes Inline Expand */}
+                          <AnimatePresence>
+                            {activeNoteApp === app.application_id && (
+                              <motion.div 
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="mt-4 pt-4 border-t border-white/10 overflow-hidden"
+                              >
+                                <div className="space-y-2 mb-4 max-h-32 overflow-y-auto pr-1">
+                                  {candidateNotes.length === 0 ? (
+                                    <p className="text-xs text-slate-500 italic">No notes yet.</p>
+                                  ) : (
+                                    candidateNotes.map(n => (
+                                      <div key={n.id} className="bg-white/5 p-2 rounded border border-white/5">
+                                        <p className="text-xs text-slate-300">{n.note}</p>
+                                        <p className="text-[10px] text-slate-500 mt-1">{new Date(n.created_at).toLocaleDateString()}</p>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                                <div className="flex gap-2">
+                                  <input 
+                                    className="flex-1 bg-black/30 border border-white/10 rounded px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                                    placeholder="Add a private note..."
+                                    value={noteText}
+                                    onChange={(e) => setNoteText(e.target.value)}
+                                  />
+                                  <button onClick={() => submitNote(app.id)} className="bg-indigo-600 px-3 rounded font-black text-[10px]">ADD</button>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+
+                        </div>
+                      ))}
                     </div>
-                  </GlassCard>
+                  </div>
                 ))}
-
-                {applicants.length === 0 && (
-                  <GlassCard className="flex flex-col items-center justify-center p-20 text-center">
-                    <Users className="text-slate-700 mb-4" size={64}/>
-                    <h3 className="text-2xl font-black text-slate-600">No Applicants Yet</h3>
-                  </GlassCard>
-                )}
               </div>
             </motion.section>
           )}

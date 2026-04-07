@@ -13,7 +13,8 @@ import {
   Zap,
   CheckCircle2,
   AlertCircle,
-  X
+  X,
+  Download
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { MatchBadge } from "@/components/ui/MatchBadge";
@@ -116,14 +117,24 @@ export default function Dashboard() {
             </h2>
             <p className="text-slate-400 font-medium">Your profile is 85% optimized for top-tier roles.</p>
           </div>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setShowSync(true)}
-            className="neon-button flex items-center gap-2"
-          >
-            <UploadCloud size={18}/> SYNC PROFILE
-          </motion.button>
+          <div className="flex gap-4">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => window.open(`http://localhost:8080/api/resume/export/${userId}`)}
+              className="px-4 py-3 border border-white/10 rounded-xl font-bold uppercase tracking-wider text-xs flex items-center gap-2 hover:bg-white/5 transition-all"
+            >
+              <Download size={18}/> Get ATS PDF
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowSync(true)}
+              className="neon-button flex items-center gap-2"
+            >
+              <UploadCloud size={18}/> SYNC PROFILE
+            </motion.button>
+          </div>
         </header>
 
         {/* --- Notification Toast Container --- */}

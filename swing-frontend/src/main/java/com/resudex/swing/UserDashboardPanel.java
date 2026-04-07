@@ -111,6 +111,13 @@ public class UserDashboardPanel extends JPanel {
         JButton btnSync = createNavMsg("  Sync Resume", "📄");
         JButton btnProf = createNavMsg("  My Profile", "👤");
         
+        JButton btnPdf = createNavMsg("  Export ATS PDF", "📄");
+        btnPdf.addActionListener(e -> {
+            try {
+                java.awt.Desktop.getDesktop().browse(new java.net.URI("http://localhost:8080/api/resume/export/" + ResudexApp.currentUserId));
+            } catch (Exception ex) {}
+        });
+        
         btnRecs.addActionListener(e -> { cardLayout.show(contentPanel, "RECS"); loadRecommendations(); });
         btnApps.addActionListener(e -> { cardLayout.show(contentPanel, "APPS"); loadMyApplications(); });
         btnSync.addActionListener(e -> cardLayout.show(contentPanel, "SYNC"));
@@ -123,6 +130,8 @@ public class UserDashboardPanel extends JPanel {
         nav.add(btnSync);
         nav.add(Box.createVerticalStrut(10));
         nav.add(btnProf);
+        nav.add(Box.createVerticalStrut(10));
+        nav.add(btnPdf);
 
         // Bottom area (User + Logout)
         JPanel bottom = new JPanel(new BorderLayout());
