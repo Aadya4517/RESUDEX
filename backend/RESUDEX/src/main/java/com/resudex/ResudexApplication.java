@@ -5,6 +5,8 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @SpringBootApplication
 public class ResudexApplication {
@@ -27,6 +29,20 @@ public class ResudexApplication {
 			db.createJob("Cloud Solutions Architect (Azure)", "Design enterprise-grade cloud solutions on Microsoft Azure. Focus on scalability, disaster recovery, and cost optimization.");
 			db.createJob("Embedded Firmware Developer", "Write low-level C/C++ for IoT devices and real-time operating systems. Experience with ESP32, STM32, and I2C/SPI protocols needed.");
 			db.createJob("Principal Frontend Engineer", "Optimize frontend performance for high-traffic sites. Expertise in Next.js, TailWind, and Three.js/WebGL for immersive 3D UIs.");
+		};
+	}
+
+	@Bean
+	public WebMvcConfigurer corsConfigurer() {
+		return new WebMvcConfigurer() {
+			@Override
+			public void addCorsMappings(CorsRegistry registry) {
+				registry.addMapping("/**")
+						.allowedOrigins("http://localhost:3000")
+						.allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+						.allowedHeaders("*")
+						.allowCredentials(true);
+			}
 		};
 	}
 }

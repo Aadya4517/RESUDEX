@@ -4,7 +4,11 @@ CREATE TABLE IF NOT EXISTS users (
     username   VARCHAR(100) UNIQUE NOT NULL,
     password   VARCHAR(100) NOT NULL,
     resume_filename VARCHAR(255),
-    resume_text    CLOB
+    resume_text    CLOB,
+    full_name      VARCHAR(100),
+    email          VARCHAR(100),
+    bio            TEXT,
+    reset_token    VARCHAR(100)
 );
 
 -- Jobs table
@@ -20,5 +24,14 @@ CREATE TABLE IF NOT EXISTS applications (
     user_id  INTEGER NOT NULL,
     job_id   INTEGER NOT NULL,
     status   VARCHAR(50) DEFAULT 'APPLIED',
+    tech_score INTEGER DEFAULT -1,
     UNIQUE (user_id, job_id)
+);
+
+-- Admin Notes table
+CREATE TABLE IF NOT EXISTS admin_notes (
+    id          INTEGER PRIMARY KEY AUTO_INCREMENT,
+    user_id     INTEGER NOT NULL,
+    note        CLOB NOT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

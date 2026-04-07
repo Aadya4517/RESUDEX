@@ -2,137 +2,212 @@ package com.resudex.swing;
 
 import javax.swing.*;
 import java.awt.*;
-import javax.imageio.ImageIO;
 
 /**
- * AdminLoginPanel - Premium login screen for the admin with background image.
- * Credentials: admin / admin123
+ * AdminLoginPanel - RESUDEX "Recruiter Access" portal parity.
+ * Purple/blue gradient authorize button, glassmorphic card, slate labels.
  */
 public class AdminLoginPanel extends JPanel {
 
-    private Image bgImage;
-
     public AdminLoginPanel() {
         setLayout(new BorderLayout());
-        try {
-            bgImage = ImageIO.read(getClass().getResource("/images/login_bg.png"));
-        } catch (Exception e) {
-            System.err.println("Could not load login_bg.png");
-        }
 
-        // -------- Top bar --------
-        JPanel topBar = new JPanel(new BorderLayout());
-        topBar.setOpaque(false);
-        topBar.setBorder(BorderFactory.createEmptyBorder(12, 20, 12, 20));
+        JPanel main = new JPanel(new GridBagLayout()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                GradientPaint gp = new GradientPaint(0, 0, new Color(13, 2, 45), 0, getHeight(), new Color(6, 0, 18));
+                g2.setPaint(gp);
+                g2.fillRect(0, 0, getWidth(), getHeight());
+                g2.setColor(new Color(0, 240, 255, 8));
+                for (int i = 0; i < getWidth(); i += 80) g2.drawLine(i, 0, i, getHeight());
+                for (int j = 0; j < getHeight(); j += 80) g2.drawLine(0, j, getWidth(), j);
+                g2.dispose();
+            }
+        };
+        main.add(createAdminCard());
+        add(main, BorderLayout.CENTER);
+    }
 
-        JButton backBtn = new JButton("← Back");
-        backBtn.putClientProperty("JButton.buttonType", "borderless");
-        backBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        backBtn.setForeground(new Color(200, 220, 210));
-        backBtn.addActionListener(e -> ResudexApp.showHome());
+    private JPanel createAdminCard() {
+        JTextField     idField   = glassField(340, 50);
+        JPasswordField passField = glassPassField(340, 50);
+        JLabel         msg       = new JLabel(" ", SwingConstants.CENTER);
+        msg.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        msg.setForeground(new Color(255, 70, 70));
+        msg.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        JLabel topTitle = new JLabel("RESUDEX — RECRUITER ACCESS");
-        topTitle.setFont(new Font("SansSerif", Font.BOLD, 16));
-        topTitle.setForeground(new Color(150, 220, 180));
-
-        topBar.add(backBtn, BorderLayout.WEST);
-        topBar.add(topTitle, BorderLayout.CENTER);
-
-        // -------- Form --------
-        JPanel center = new JPanel(new GridBagLayout());
-        center.setOpaque(false);
-
-        JPanel card = new JPanel(new GridBagLayout());
-        card.setBackground(new Color(20, 25, 22, 230)); // Darker, translucent
-        card.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(60, 85, 70), 1, true),
-            BorderFactory.createEmptyBorder(35, 45, 35, 45)
-        ));
-        card.setPreferredSize(new Dimension(420, 380));
-
-        GridBagConstraints c = new GridBagConstraints();
-        c.fill = GridBagConstraints.HORIZONTAL;
-        c.insets = new Insets(8, 0, 8, 0);
-
-        JLabel heading = new JLabel("Security Check", SwingConstants.CENTER);
-        heading.setFont(new Font("SansSerif", Font.BOLD, 26));
-        heading.setForeground(new Color(220, 240, 230));
-
-        JLabel hint = new JLabel("Authorized Personnel Only", SwingConstants.CENTER);
-        hint.setFont(new Font("SansSerif", Font.ITALIC, 11));
-        hint.setForeground(new Color(120, 140, 130));
-
-        JTextField userField = new JTextField("admin");
-        userField.putClientProperty("JTextField.placeholderText", "Username");
-        userField.setPreferredSize(new Dimension(300, 42));
-
-        JPasswordField passField = new JPasswordField("admin123");
-        passField.putClientProperty("JTextField.placeholderText", "Password");
-        passField.setPreferredSize(new Dimension(300, 42));
-
-        JLabel msgLabel = new JLabel(" ", SwingConstants.CENTER);
-        msgLabel.setFont(new Font("SansSerif", Font.ITALIC, 12));
-
-        JButton loginBtn = new JButton("ACCESS DASHBOARD");
-        loginBtn.setFont(new Font("SansSerif", Font.BOLD, 14));
-        loginBtn.setBackground(new Color(40, 160, 100));
-        loginBtn.setForeground(Color.WHITE);
-        loginBtn.putClientProperty("JButton.buttonType", "roundRect");
-        loginBtn.setPreferredSize(new Dimension(300, 50));
-
-        loginBtn.addActionListener(e -> {
-            String username = userField.getText().trim();
-            String password = new String(passField.getPassword()).trim();
-            loginBtn.setEnabled(false);
-            loginBtn.setText("Verifying Credentials...");
+        JButton btn = authorizeButton("AUTHORIZE  \u2192");
+        btn.addActionListener(e -> {
+            String u    = idField.getText().trim();
+            String pStr = new String(passField.getPassword()).trim();
+            if (u.isEmpty() || pStr.isEmpty()) { msg.setText("Authorization required."); return; }
+            btn.setText("VERIFYING...");
             new Thread(() -> {
-                boolean ok = ApiClient.adminLogin(username, password);
+                boolean ok = ApiClient.adminLogin(u, pStr);
                 SwingUtilities.invokeLater(() -> {
-                    loginBtn.setEnabled(true);
-                    loginBtn.setText("ACCESS DASHBOARD");
                     if (ok) {
                         ResudexApp.showAdminDashboard();
                     } else {
-                        msgLabel.setText("Access Denied. Try: admin / admin123");
-                        msgLabel.setForeground(new Color(255, 120, 120));
+                        btn.setText("AUTHORIZE  \u2192");
+                        msg.setText("ACCESS DENIED");
                     }
                 });
             }).start();
         });
 
-        c.gridy = 0; card.add(heading, c);
-        c.gridy = 1; card.add(hint, c);
-        c.gridy = 2; card.add(Box.createVerticalStrut(15), c);
-        c.gridy = 3; card.add(label("Admin ID"), c);
-        c.gridy = 4; card.add(userField, c);
-        c.gridy = 5; card.add(label("Passkey"), c);
-        c.gridy = 6; card.add(passField, c);
-        c.gridy = 7; card.add(msgLabel, c);
-        c.gridy = 8; card.add(loginBtn, c);
+        JButton back = new JButton("\u2190 RETURN TO FRONTEND");
+        back.setContentAreaFilled(false);
+        back.setBorderPainted(false);
+        back.setFocusPainted(false);
+        back.setForeground(new Color(148, 163, 184));
+        back.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        back.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        back.setAlignmentX(Component.CENTER_ALIGNMENT);
+        back.addActionListener(e -> ResudexApp.showHome());
 
-        center.add(card);
-        add(topBar, BorderLayout.NORTH);
-        add(center, BorderLayout.CENTER);
+        // Card content with BoxLayout
+        JPanel p = new JPanel();
+        p.setOpaque(false);
+        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
+
+        // Header branding  ⬡ RESUDEX ADMIN
+        JLabel branding = new JLabel("<html>&#x1F6E1; RESUDEX &nbsp;<font color='#94A3B8'>ADMIN</font></html>", SwingConstants.CENTER);
+        branding.setFont(new Font("SansSerif", Font.BOLD, 22));
+        branding.setForeground(Color.WHITE);
+        branding.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel heading = new JLabel("Recruiter Access", SwingConstants.CENTER);
+        heading.setFont(new Font("SansSerif", Font.BOLD, 38));
+        heading.setForeground(Color.WHITE);
+        heading.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel sub = new JLabel("<html><center>Secure portal for candidate selection and job management.</center></html>", SwingConstants.CENTER);
+        sub.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        sub.setForeground(new Color(148, 163, 184));
+        sub.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel restricted = new JLabel("RESTRICTED SYSTEM ACCESS", SwingConstants.CENTER);
+        restricted.setFont(new Font("SansSerif", Font.BOLD, 10));
+        restricted.setForeground(new Color(71, 85, 105));
+        restricted.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        p.add(branding);
+        p.add(Box.createRigidArea(new Dimension(0, 34)));
+        p.add(heading);
+        p.add(Box.createRigidArea(new Dimension(0, 8)));
+        p.add(sub);
+        p.add(Box.createRigidArea(new Dimension(0, 32)));
+        p.add(fieldRow("USERNAME", idField));
+        p.add(Box.createRigidArea(new Dimension(0, 14)));
+        p.add(fieldRow("PASSWORD", passField));
+        p.add(Box.createRigidArea(new Dimension(0, 10)));
+        p.add(centerWrap(msg));
+        p.add(Box.createRigidArea(new Dimension(0, 18)));
+        p.add(centerWrap(btn));
+        p.add(Box.createRigidArea(new Dimension(0, 18)));
+        p.add(centerWrap(back));
+
+        // Glass card wrapper
+        JPanel glass = new JPanel(new BorderLayout()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(new Color(255, 255, 255, 6));
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 28, 28);
+                g2.setColor(new Color(255, 255, 255, 18));
+                g2.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 28, 28);
+                g2.dispose();
+            }
+        };
+        glass.setOpaque(false);
+        glass.setBorder(BorderFactory.createEmptyBorder(40, 50, 40, 50));
+        glass.add(p, BorderLayout.CENTER);
+        return glass;
     }
 
-    @Override
-    protected void paintComponent(Graphics g) {
-        if (bgImage != null) {
-            g.drawImage(bgImage, 0, 0, getWidth(), getHeight(), this);
-            Graphics2D g2 = (Graphics2D) g.create();
-            g2.setColor(new Color(15, 25, 20, 200));
-            g2.fillRect(0, 0, getWidth(), getHeight());
-            g2.dispose();
-        } else {
-            super.paintComponent(g);
-            setBackground(new Color(18, 20, 24));
-        }
+    private JPanel fieldRow(String labelText, JComponent field) {
+        JPanel row = new JPanel();
+        row.setOpaque(false);
+        row.setLayout(new BoxLayout(row, BoxLayout.Y_AXIS));
+        row.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel lbl = new JLabel(labelText);
+        lbl.setFont(new Font("SansSerif", Font.BOLD, 10));
+        lbl.setForeground(new Color(148, 163, 184, 200));
+        lbl.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        field.setAlignmentX(Component.CENTER_ALIGNMENT);
+        row.add(lbl);
+        row.add(Box.createRigidArea(new Dimension(0, 5)));
+        row.add(field);
+        return row;
     }
 
-    private JLabel label(String text) {
-        JLabel l = new JLabel(text);
-        l.setFont(new Font("SansSerif", Font.BOLD, 12));
-        l.setForeground(new Color(140, 170, 150));
-        return l;
+    private JTextField glassField(int w, int h) {
+        JTextField f = new JTextField();
+        f.setMaximumSize(new Dimension(w, h));
+        f.setPreferredSize(new Dimension(w, h));
+        f.setBackground(new Color(30, 30, 50));
+        f.setForeground(Color.WHITE);
+        f.setCaretColor(Color.WHITE);
+        f.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        f.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(255, 255, 255, 22), 1, true),
+            BorderFactory.createEmptyBorder(0, 14, 0, 14)
+        ));
+        return f;
+    }
+
+    private JPasswordField glassPassField(int w, int h) {
+        JPasswordField f = new JPasswordField();
+        f.setMaximumSize(new Dimension(w, h));
+        f.setPreferredSize(new Dimension(w, h));
+        f.setBackground(new Color(30, 30, 50));
+        f.setForeground(Color.WHITE);
+        f.setCaretColor(Color.WHITE);
+        f.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        f.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(255, 255, 255, 22), 1, true),
+            BorderFactory.createEmptyBorder(0, 14, 0, 14)
+        ));
+        return f;
+    }
+
+    /** Purple→Indigo gradient button matching screenshot 1 */
+    private JButton authorizeButton(String text) {
+        JButton b = new JButton(text) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                GradientPaint gp = new GradientPaint(0, 0, new Color(79, 70, 229), getWidth(), 0, new Color(147, 51, 234));
+                g2.setPaint(gp);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 14, 14);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        b.setFont(new Font("SansSerif", Font.BOLD, 15));
+        b.setForeground(Color.WHITE);
+        b.setContentAreaFilled(false);
+        b.setBorderPainted(false);
+        b.setFocusPainted(false);
+        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        b.setPreferredSize(new Dimension(340, 55));
+        b.setMaximumSize(new Dimension(340, 55));
+        b.setAlignmentX(Component.CENTER_ALIGNMENT);
+        return b;
+    }
+
+    private JPanel centerWrap(JComponent c) {
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        p.setOpaque(false);
+        p.add(c);
+        p.setAlignmentX(Component.CENTER_ALIGNMENT);
+        return p;
     }
 }

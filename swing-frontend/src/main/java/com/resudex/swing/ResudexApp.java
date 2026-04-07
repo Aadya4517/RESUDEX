@@ -53,13 +53,24 @@ public class ResudexApp extends JFrame {
         // Use FlatLaf for a modern "innovative" look
         try {
             UIManager.setLookAndFeel(new FlatMacDarkLaf());
-            // Global UI tweaks for premium feel
-            UIManager.put("Button.arc", 10);
-            UIManager.put("Component.arc", 10);
-            UIManager.put("TextComponent.arc", 10);
-            UIManager.put("ScrollBar.thumbArc", 999);
-            UIManager.put("ProgressBar.arc", 999);
-            UIManager.put("Table.alternateRowColor", new Color(45, 48, 52));
+            
+            // Absolute Parity Design Tokens
+            Color bgMidnight = new Color(13, 2, 33); // #0D0221
+            Color proCyan    = new Color(0, 240, 255); // #00F0FF
+            Color proBlue    = new Color(37, 99, 235); // #2563EB
+            
+            UIManager.put("Panel.background", bgMidnight);
+            UIManager.put("Label.foreground", Color.WHITE);
+            UIManager.put("Button.arc", 999); // Full Pill Shape
+            UIManager.put("Component.arc", 12);
+            UIManager.put("TextComponent.arc", 12);
+            UIManager.put("Table.alternateRowColor", new Color(17, 3, 44));
+            
+            UIManager.put("Button.background", proBlue);
+            UIManager.put("Button.foreground", Color.WHITE);
+            UIManager.put("Component.focusColor", proCyan);
+            UIManager.put("TabbedPane.selectedBackground", proCyan);
+            UIManager.put("ProgressBar.foreground", proCyan);
         } catch (Exception e) {
             System.err.println("Failed to initialize FlatLaf");
         }

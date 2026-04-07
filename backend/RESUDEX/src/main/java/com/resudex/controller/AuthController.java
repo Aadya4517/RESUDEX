@@ -66,4 +66,49 @@ public class AuthController {
             return ResponseEntity.status(401).body(Map.of("error", "Invalid admin credentials"));
         }
     }
+
+    // -------- Forgot Password --------
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Map<String, Object>> forgotPassword(@RequestBody Map<String, String> body) {
+        String username = body.get("username");
+        if (username == null || username.isBlank()) return ResponseEntity.badRequest().body(Map.of("error", "Username is required"));
+        
+        String token = java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        db.setUserResetToken(username, token);
+        
+        System.out.println("RESET TOKEN FOR " + username + ": " + token);
+        return ResponseEntity.ok(Map.of("message", "Reset code generated (check server logs for simulation)"));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<Map<String, Object>> resetPassword(@RequestBody Map<String, String> body) {
+        String token = body.get("token");
+        String newPassword = body.get("password");
+        
+        if (token == null || newPassword == null) return ResponseEntity.badRequest().body(Map.of("error", "Token and new password required"));
+        
+        boolean ok = db.resetPassword(token, newPassword);
+        if (ok) return ResponseEntity.ok(Map.of("message", "Password reset successful!"));
+        else return ResponseEntity.badRequest().body(Map.of("error", "Invalid or expired token"));
+    }
+
+    // -------- Social Login Simulation --------
+    @PostMapping("/social-login")
+    public ResponseEntity<Map<String, Object>> socialLogin(@RequestBody Map<String, String> body) {
+        String provider = body.get("provider"); // google or microsoft
+        String email = body.get("email");
+        
+        // Mocking: Use a predictable password for mock accounts to ensure persistence
+        String dummyPass = "mock_social_user_pass";
+        String username = email.split("@")[0];
+        
+        db.registerUser(username, dummyPass);
+        Map<String, Object> user = db.loginUser(username, dummyPass);
+        
+        return ResponseEntity.ok(Map.of(
+            "userId", user.get("id"),
+            "username", user.get("username"),
+            "message", "Logged in via " + provider
+        ));
+    }
 }
