@@ -24,11 +24,14 @@ public class AuthController {
         String username = body.get("username");
         String password = body.get("password");
 
+        String fullName = body.getOrDefault("fullName", "");
+        String email = body.getOrDefault("email", "");
+
         if (username == null || username.isBlank() || password == null || password.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Username and password are required"));
         }
 
-        boolean success = db.registerUser(username.trim(), password.trim());
+        boolean success = db.registerUser(username.trim(), password.trim(), fullName, email);
         if (success) {
             return ResponseEntity.ok(Map.of("message", "Registration successful! Please log in."));
         } else {
@@ -102,7 +105,7 @@ public class AuthController {
         String dummyPass = "mock_social_user_pass";
         String username = email.split("@")[0];
         
-        db.registerUser(username, dummyPass);
+        db.registerUser(username, dummyPass, username, email);
         Map<String, Object> user = db.loginUser(username, dummyPass);
         
         return ResponseEntity.ok(Map.of(

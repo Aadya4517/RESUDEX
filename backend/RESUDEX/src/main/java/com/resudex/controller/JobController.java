@@ -176,6 +176,8 @@ public class JobController {
 
             Map<String, Object> row = new LinkedHashMap<>(applicant);
 
+            String resumeFilename = (String) applicant.getOrDefault("resume_filename", "resume.pdf");
+
             if (!resumeText.isBlank()) {
                 ResumeScore score = scorer.scoreResume(resumeFilename, resumeText, jobDescription);
                 row.put("score",          score.getFinalScore());
