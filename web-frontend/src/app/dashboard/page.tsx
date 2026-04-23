@@ -77,8 +77,8 @@ export default function Dashboard() {
       set_is_busy(true);
       // new endpoints
       const [res_jobs, res_stats] = await Promise.all([
-        axios.get(`http://localhost:8080/api/jobs/matched_for/${uid}`),
-        axios.get(`http://localhost:8080/api/usr/cv_stats/${uid}`)
+        axios.get(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/jobs/matched_for/${uid}`),
+        axios.get(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/usr/cv_stats/${uid}`)
       ]);
       set_job_list(res_jobs.data);
       set_stats(res_stats.data);
@@ -92,7 +92,7 @@ export default function Dashboard() {
   const poll_notifs = async () => {
     if (!uid) return;
     try {
-      const res = await axios.get(`http://localhost:8080/api/notifications/new_for/${uid}`);
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/notifications/new_for/${uid}`);
       if (res.data.length !== notifs.length) {
         set_notifs(res.data);
       }
@@ -101,7 +101,7 @@ export default function Dashboard() {
 
   const kill_notif = async (nid: number) => {
     try {
-      await axios.post(`http://localhost:8080/api/notifications/dismiss/${nid}`);
+      await axios.post(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/notifications/dismiss/${nid}`);
       set_notifs(prev => prev.filter(n => n.id !== nid));
     } catch (e) {}
   };
@@ -145,7 +145,7 @@ export default function Dashboard() {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => window.open(`http://localhost:8080/api/resume/get_pdf/${uid}`)}
+              onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/resume/get_pdf/${uid}`)}
               className="px-4 py-3 border border-white/10 rounded-xl font-bold uppercase tracking-wider text-xs flex items-center gap-2 hover:bg-white/5 transition-all"
             >
               <Download size={18}/> GET PDF

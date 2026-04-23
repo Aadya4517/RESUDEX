@@ -6,15 +6,11 @@ import { UploadCloud, FileText, CheckCircle2, AlertCircle, X, Zap } from "lucide
 import { GlassCard } from "@/components/ui/GlassCard";
 
 interface ResumeSyncProps {
-  uid: number;
-  on_ok: () => void;
+  userId: number;
+  onSuccess: () => void;
 }
 
-/**
- * Component for uploading CV.
- * Scans the doc and updates the DB.
- */
-export const ResumeSync = ({ uid, on_ok }: ResumeSyncProps) => {
+export const ResumeSync = ({ userId: uid, onSuccess: on_ok }: ResumeSyncProps) => {
   const [dragging, set_dragging] = useState(false);
   const [doc, set_doc] = useState<File | null>(null);
   const [is_busy, set_is_busy] = useState(false);
@@ -45,16 +41,15 @@ export const ResumeSync = ({ uid, on_ok }: ResumeSyncProps) => {
     set_load_ptr(0);
 
     const data = new FormData();
-    data.append("uid", uid.toString());
+    data.append("userId", uid.toString());
     data.append("file", doc);
 
     try {
-      // fake progress for aesthetic
       const loop = setInterval(() => {
         set_load_ptr(p => (p < 90 ? p + 10 : p));
       }, 200);
 
-      await axios.post("http://localhost:8080/api/resume/push_cv", data, {
+      await axios.post(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/resume/push_cv`, data, {
         headers: { "Content-Type": "multipart/form-data" }
       });
 

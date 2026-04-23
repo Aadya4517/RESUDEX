@@ -1,19 +1,28 @@
 "use client";
 import { useState } from "react";
+import axios from "axios";
 import { motion } from "framer-motion";
-import { ShieldCheck, Lock, User, ArrowRight } from "lucide-react";
+import { ShieldCheck, Lock, User, ArrowRight, AlertCircle } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 
 export default function AdminLogin() {
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("admin123");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === "admin" && password === "admin123") {
+    setBusy(true); setErr("");
+    try {
+      await axios.post(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/auth/admin_log_in`, {
+        username, password
+      });
       window.location.href = "/admin/dashboard";
-    } else {
-      alert("Invalid Admin Credentials");
+    } catch {
+      setErr("Access denied. Check credentials.");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -69,9 +78,10 @@ export default function AdminLogin() {
             </div>
           </div>
 
-          <button className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 group transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)]">
-            AUTHORIZE <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+          <button className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 group transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)]" disabled={busy}>
+            {busy ? "Verifying..." : "AUTHORIZE"} <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
           </button>
+          {err && <p className="text-red-400 text-xs font-bold flex items-center gap-1"><AlertCircle size={12}/>{err}</p>}
         </form>
 
         <div className="mt-8 pt-8 border-t border-white/5 text-center">

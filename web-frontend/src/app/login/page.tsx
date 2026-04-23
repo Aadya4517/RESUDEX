@@ -28,22 +28,17 @@ export default function AuthPage() {
 
     try {
       if (is_login) {
-        // use the new snake_case endpoint
-        const res = await axios.post("http://localhost:8080/api/auth/log_in", { 
-          usr: usr, 
-          pwd: pass 
+        const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/auth/log_in`, { 
+          username: usr, 
+          password: pass 
         });
-        
-        // save the user metadata in sync
         localStorage.setItem("uid", res.data.uid);
         localStorage.setItem("usr", res.data.usr);
-        
         window.location.href = "/dashboard";
       } else {
-        // registration flow
-        await axios.post("http://localhost:8080/api/auth/register_usr", {
-          usr: usr,
-          pwd: pass,
+        await axios.post(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/auth/register_usr`, {
+          username: usr,
+          password: pass,
           email: mail,
           f_name: fname
         });
@@ -54,7 +49,7 @@ export default function AuthPage() {
         }, 2000);
       }
     } catch (err: any) {
-      set_err_msg(err.response?.data?.error || "Auth fails. Check logic.");
+      set_err_msg(err.response?.data?.err || err.response?.data?.error || "Login failed. Check credentials.");
       console.error("Auth Err:", err);
     } finally {
       set_is_busy(false);
