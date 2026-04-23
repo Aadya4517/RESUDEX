@@ -3,280 +3,295 @@ package com.resudex.service;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
 
 /**
- * DatabaseService - handles all JDBC operations for RESUDEX.
- * Uses Spring's JdbcTemplate for simple, readable queries.
+ * DB Core Service. 
+ * Handles all the low-level SQL stuff using Spring's Template.
  */
 @Service
 public class DatabaseService {
 
-    private final JdbcTemplate jdbc;
+    private final JdbcTemplate db_tpl;
 
-    public DatabaseService(JdbcTemplate jdbc) {
-        this.jdbc = jdbc;
-        ensureSchema();
+    public DatabaseService(JdbcTemplate db_tpl) {
+        this.db_tpl = db_tpl;
+        init_db_schema();
     }
 
-    private void ensureSchema() {
+    private static String hashPw(String raw) {
         try {
-            // H2-specific "ALTER TABLE ... ADD COLUMN IF NOT EXISTS"
-            jdbc.execute("ALTER TABLE applications ADD COLUMN IF NOT EXISTS tech_score INTEGER DEFAULT -1");
-            jdbc.execute("ALTER TABLE applications ADD COLUMN IF NOT EXISTS feedback TEXT");
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] b = md.digest(raw.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte x : b) sb.append(String.format("%02x", x));
+            return sb.toString();
+        } catch (Exception e) { return raw; }
+    }
+
+    private void init_db_schema() {
+        try {
+            // we need these columns for the new features
+            db_tpl.execute("ALTER TABLE applications ADD COLUMN IF NOT EXISTS tech_score INTEGER DEFAULT -1");
+            db_tpl.execute("ALTER TABLE applications ADD COLUMN IF NOT EXISTS feedback TEXT");
+            db_tpl.execute("ALTER TABLE applications ADD COLUMN IF NOT EXISTS vibes VARCHAR(255)");
             
-            jdbc.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(100)");
-            jdbc.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(100)");
-            jdbc.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT");
-            jdbc.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token VARCHAR(100)");
-            jdbc.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS resume_filename VARCHAR(255)");
-            jdbc.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS resume_text CLOB");
+            db_tpl.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(100)");
+            db_tpl.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(100)");
+            db_tpl.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT");
+            db_tpl.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token VARCHAR(100)");
+            db_tpl.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS resume_filename VARCHAR(255)");
+            db_tpl.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS resume_text VARCHAR(65535)");
+            // migrate existing CLOB column to VARCHAR if needed
+            try {
+                db_tpl.execute("ALTER TABLE users ALTER COLUMN resume_text VARCHAR(65535)");
+            } catch (Exception ignored) {}
 
-            // Create notifications table
-            jdbc.execute("CREATE TABLE IF NOT EXISTS notifications (" +
-                         "id INT AUTO_INCREMENT PRIMARY KEY, " +
-                         "user_id INT, " +
-                         "message TEXT, " +
-                         "is_read BOOLEAN DEFAULT FALSE, " +
-                         "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+            // track if job is open or closed
+            db_tpl.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'OPEN'");
+
+            // basic auth tables
+            db_tpl.execute("CREATE TABLE IF NOT EXISTS admins (id INT AUTO_INCREMENT PRIMARY KEY, username VARCHAR(100) UNIQUE, password VARCHAR(100))");
+            db_tpl.execute("CREATE TABLE IF NOT EXISTS admin_notes (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT, note TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+            db_tpl.execute("CREATE TABLE IF NOT EXISTS notifications (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT, message TEXT, is_read BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+
+            // resume snapshot history for skill trajectory
+            db_tpl.execute("CREATE TABLE IF NOT EXISTS resume_snapshots (" +
+                "id INT AUTO_INCREMENT PRIMARY KEY, " +
+                "user_id INT NOT NULL, " +
+                "filename VARCHAR(255), " +
+                "java_sc INT DEFAULT 0, " +
+                "web_sc INT DEFAULT 0, " +
+                "python_sc INT DEFAULT 0, " +
+                "cpp_sc INT DEFAULT 0, " +
+                "devops_sc INT DEFAULT 0, " +
+                "db_sc INT DEFAULT 0, " +
+                "exp_yrs INT DEFAULT 0, " +
+                "uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+            ")");
+
+            // default creds (password is SHA-256 of "admin123")
+            List<Map<String, Object>> check = db_tpl.queryForList("SELECT * FROM admins");
+            if (check.isEmpty()) {
+                db_tpl.update("INSERT INTO admins (username, password) VALUES (?, ?)",
+                    "admin", "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9");
+            } else {
+                // migrate plain-text admin password if not yet hashed (length < 60 means not hashed)
+                for (Map<String, Object> adm : check) {
+                    String pw = (String) adm.get("password");
+                    if (pw != null && pw.length() < 60) {
+                        String hashed = hashPw(pw);
+                        db_tpl.update("UPDATE admins SET password = ? WHERE id = ?", hashed, adm.get("id"));
+                    }
+                }
+            }
+            // migrate plain-text user passwords
+            try {
+                List<Map<String, Object>> users = db_tpl.queryForList("SELECT id, password FROM users");
+                for (Map<String, Object> u : users) {
+                    String pw = (String) u.get("password");
+                    if (pw != null && pw.length() < 60) {
+                        db_tpl.update("UPDATE users SET password = ? WHERE id = ?", hashPw(pw), u.get("id"));
+                    }
+                }
+            } catch (Exception ignored) {}
         } catch (Exception e) {
-            System.err.println("Migration notice: " + e.getMessage());
+            System.err.println("DB Fix Log: " + e.getMessage());
         }
     }
 
-    // ===================== USER METHODS =====================
+    // --- USER STUFF ---
 
-    /**
-     * Register a new user with full details. Returns false if username already taken.
-     */
-    public boolean registerUser(String username, String password, String fullName, String email) {
+    public boolean add_new_user(String usr, String pass, String name, String mail) {
         try {
-            jdbc.update(
-                "INSERT INTO users (username, password, full_name, email) VALUES (?, ?, ?, ?)",
-                username, password, fullName, email
-            );
+            db_tpl.update("INSERT INTO users (username, password, full_name, email) VALUES (?, ?, ?, ?)", usr, pass, name, mail);
             return true;
-        } catch (Exception e) {
-            return false; // duplicate username
+        } catch (Exception ex) {
+            return false; // likely duplicate user
         }
     }
 
-    /**
-     * Login user. Returns user map {id, username} or null on failure.
-     */
-    public Map<String, Object> loginUser(String username, String password) {
+    public Map<String, Object> auth_usr(String usr, String pass) {
         try {
-            return jdbc.queryForMap(
-                "SELECT id AS \"id\", username AS \"username\" FROM users WHERE username = ? AND password = ?",
-                username, password
-            );
-        } catch (Exception e) {
+            return db_tpl.queryForMap("SELECT id AS \"id\", username AS \"username\" FROM users WHERE username = ? AND password = ?", usr, pass);
+        } catch (Exception ex) {
             return null;
         }
     }
 
-    /**
-     * Save uploaded resume text for a user.
-     */
-    public void saveResume(int userId, String filename, String text) {
-        jdbc.update(
-            "UPDATE users SET resume_filename = ?, resume_text = ? WHERE id = ?",
-            filename, text, userId
-        );
+    public void store_cv_text(int uid, String file, String raw_text) {
+        db_tpl.update("UPDATE users SET resume_filename = ?, resume_text = ? WHERE id = ?", file, raw_text, uid);
     }
 
-    /**
-     * Get user by ID.
-     */
-    public Map<String, Object> getUserById(int userId) {
+    public Map<String, Object> get_usr_by_id(int uid) {
         try {
-            return jdbc.queryForMap(
-                "SELECT id AS \"id\", username AS \"username\", full_name AS \"full_name\", " +
-                "email AS \"email\", bio AS \"bio\", resume_filename AS \"resume_filename\", " +
-                "resume_text AS \"resume_text\" FROM users WHERE id = ?",
-                userId
-            );
-        } catch (Exception e) {
+            return db_tpl.queryForMap("SELECT id AS \"id\", username AS \"username\", full_name AS \"full_name\", email AS \"email\", bio AS \"bio\", resume_filename AS \"resume_filename\", resume_text AS \"resume_text\" FROM users WHERE id = ?", uid);
+        } catch (Exception ex) {
             return null;
         }
     }
 
-    /**
-     * Update user profile details.
-     */
-    public void updateUserProfile(int userId, String fullName, String email, String bio) {
-        jdbc.update(
-            "UPDATE users SET full_name = ?, email = ?, bio = ? WHERE id = ?",
-            fullName, email, bio, userId
-        );
+    public void update_profile(int uid, String name, String mail, String bio_text) {
+        db_tpl.update("UPDATE users SET full_name = ?, email = ?, bio = ? WHERE id = ?", name, mail, bio_text, uid);
     }
 
-    // ===================== JOB METHODS =====================
-
-    /**
-     * Create a new job posting.
-     */
-    public void createJob(String title, String description) {
-        jdbc.update(
-            "INSERT INTO jobs (title, description) VALUES (?, ?)",
-            title, description
-        );
-    }
-
-    /**
-     * Get all jobs.
-     */
-    public List<Map<String, Object>> getAllJobs() {
-        return jdbc.queryForList("SELECT * FROM jobs ORDER BY id");
-    }
-
-    /**
-     * Get a single job by ID.
-     */
-    public Map<String, Object> getJobById(int jobId) {
+    public Map<String, Object> auth_admin(String usr, String pass) {
         try {
-            return jdbc.queryForMap("SELECT id AS \"id\", title AS \"title\", description AS \"description\" FROM jobs WHERE id = ?", jobId);
-        } catch (Exception e) {
+            return db_tpl.queryForMap("SELECT id AS \"id\", username AS \"username\" FROM admins WHERE username = ? AND password = ?", usr, pass);
+        } catch (Exception ex) {
             return null;
         }
     }
 
-    /**
-     * Update a job posting.
-     */
-    public void updateJob(int id, String title, String description) {
-        jdbc.update(
-            "UPDATE jobs SET title = ?, description = ? WHERE id = ?",
-            title, description, id
-        );
+    // --- JOBS ---
+
+    public void post_job(String title, String desc, String stat) {
+        db_tpl.update("INSERT INTO jobs (title, description, status) VALUES (?, ?, ?)", title, desc, stat);
     }
 
-    /**
-     * Delete a job posting and its applications.
-     */
-    public void deleteJob(int id) {
-        // Cascading manually if not set in DB
-        jdbc.update("DELETE FROM applications WHERE job_id = ?", id);
-        jdbc.update("DELETE FROM jobs WHERE id = ?", id);
+    public List<Map<String, Object>> list_all_jobs(boolean is_adm) {
+        String sql = "SELECT id AS \"id\", title AS \"title\", description AS \"description\", status AS \"status\" FROM jobs";
+        if (is_adm) {
+            return db_tpl.queryForList(sql + " ORDER BY id DESC");
+        } else {
+            return db_tpl.queryForList(sql + " WHERE status = 'OPEN' ORDER BY id DESC");
+        }
     }
 
-    // ===================== APPLICATION METHODS =====================
-
-    /**
-     * Apply for a job. Returns false if already applied.
-     */
-    public boolean applyForJob(int userId, int jobId, int techScore) {
+    public Map<String, Object> get_job_info(int jid) {
         try {
-            jdbc.update(
-                "INSERT INTO applications (user_id, job_id, tech_score) VALUES (?, ?, ?)",
-                userId, jobId, techScore
-            );
+            return db_tpl.queryForMap("SELECT id AS \"id\", title AS \"title\", description AS \"description\", status AS \"status\" FROM jobs WHERE id = ?", jid);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    public void edit_job_data(int jid, String title, String desc, String stat) {
+        db_tpl.update("UPDATE jobs SET title = ?, description = ?, status = ? WHERE id = ?", title, desc, stat, jid);
+    }
+
+    public void kill_job(int jid) {
+        db_tpl.update("DELETE FROM applications WHERE job_id = ?", jid);
+        db_tpl.update("DELETE FROM jobs WHERE id = ?", jid);
+    }
+
+    // --- APPS ---
+
+    public boolean sub_app(int uid, int jid, int score) {
+        try {
+            db_tpl.update("INSERT INTO applications (user_id, job_id, tech_score) VALUES (?, ?, ?)", uid, jid, score);
             return true;
-        } catch (Exception e) {
-            return false; // already applied or error
+        } catch (Exception ex) {
+            return false;
         }
     }
 
-    /**
-     * Get all applicants for a job, joining user info.
-     */
-    public List<Map<String, Object>> getApplicantsForJob(int jobId) {
-        return jdbc.queryForList(
-            "SELECT a.id AS \"app_id\", a.status AS \"status\", a.tech_score AS \"tech_score\", " +
-            "u.id AS \"user_id\", u.username AS \"username\", u.resume_text AS \"resume_text\", " +
-            "u.resume_filename AS \"resume_filename\" " +
-            "FROM applications a " +
-            "JOIN users u ON a.user_id = u.id " +
-            "WHERE a.job_id = ? " +
-            "ORDER BY a.id",
-            jobId
-        );
+    public List<Map<String, Object>> list_apps_for_job(int jid) {
+        String sql = "SELECT a.id AS \"app_id\", a.status AS \"status\", a.tech_score AS \"tech_score\", " +
+                     "a.vibes AS \"vibes\", " +
+                     "u.id AS \"user_id\", u.username AS \"username\", u.resume_text AS \"resume_text\", " +
+                     "u.resume_filename AS \"resume_filename\" " +
+                     "FROM applications a " +
+                     "JOIN users u ON a.user_id = u.id " +
+                     "WHERE a.job_id = ? " +
+                     "ORDER BY a.id";
+        return db_tpl.queryForList(sql, jid);
     }
 
-    /**
-     * Mark an applicant as SELECTED. (Legacy)
-     */
-    public void selectApplicant(int applicationId) {
-        updateApplicationStatus(applicationId, "SELECTED");
+    public void pick_applicant(int aid) {
+        change_app_status(aid, "SELECTED");
     }
 
-    /**
-     * Update application status generically (for Kanban board).
-     */
-    public void updateApplicationStatus(int applicationId, String status) {
-        jdbc.update(
-            "UPDATE applications SET status = ? WHERE id = ?",
-            status, applicationId
-        );
+    public void change_app_status(int aid, String stat) {
+        db_tpl.update("UPDATE applications SET status = ? WHERE id = ?", stat, aid);
     }
 
-    /**
-     * Get all applications for a specific user, joining job info.
-     */
-    public List<Map<String, Object>> getUserApplications(int userId) {
-        return jdbc.queryForList(
-            "SELECT a.id AS \"app_id\", a.status AS \"status\", a.tech_score AS \"tech_score\", " +
-            "a.feedback AS \"feedback\", j.id AS \"job_id\", j.title AS \"title\", j.description AS \"description\" " +
-            "FROM applications a " +
-            "JOIN jobs j ON a.job_id = j.id " +
-            "WHERE a.user_id = ? " +
-            "ORDER BY a.id DESC",
-            userId
-        );
+    public List<Map<String, Object>> usr_apps(int uid) {
+        String q = "SELECT a.id AS \"app_id\", a.status AS \"status\", a.tech_score AS \"tech_score\", " +
+                   "a.vibes AS \"vibes\", a.feedback AS \"feedback\", j.id AS \"job_id\", j.title AS \"title\", j.description AS \"description\" " +
+                   "FROM applications a " +
+                   "JOIN jobs j ON a.job_id = j.id " +
+                   "WHERE a.user_id = ? " +
+                   "ORDER BY a.id DESC";
+        return db_tpl.queryForList(q, uid);
     }
 
-    // ===================== NOTIFICATION & FEEDBACK METHODS =====================
-
-    public void addNotification(int userId, String message) {
-        jdbc.update("INSERT INTO notifications (user_id, message) VALUES (?, ?)", userId, message);
+    public void set_app_vibes(int aid, String tag_str) {
+        db_tpl.update("UPDATE applications SET vibes = ? WHERE id = ?", tag_str, aid);
     }
 
-    public List<Map<String, Object>> getUnreadNotifications(int userId) {
-        return jdbc.queryForList(
-            "SELECT id AS \"id\", user_id AS \"user_id\", message AS \"message\", " +
-            "is_read AS \"is_read\", created_at AS \"created_at\" " +
-            "FROM notifications WHERE user_id = ? AND is_read = FALSE ORDER BY created_at DESC",
-            userId
-        );
+    // --- NOTIFS & FEEDBACK ---
+
+    public void push_notif(int uid, String msg) {
+        db_tpl.update("INSERT INTO notifications (user_id, message) VALUES (?, ?)", uid, msg);
     }
 
-    public void markNotificationRead(int notificationId) {
-        jdbc.update("UPDATE notifications SET is_read = TRUE WHERE id = ?", notificationId);
+    public List<Map<String, Object>> get_unread(int uid) {
+        return db_tpl.queryForList("SELECT id AS \"id\", user_id AS \"user_id\", message AS \"message\", is_read AS \"is_read\", created_at AS \"created_at\" FROM notifications WHERE user_id = ? AND is_read = FALSE ORDER BY created_at DESC", uid);
     }
 
-    public void updateApplicationFeedback(int applicationId, String feedback) {
-        jdbc.update("UPDATE applications SET feedback = ? WHERE id = ?", feedback, applicationId);
+    public void seen_notif(int nid) {
+        db_tpl.update("UPDATE notifications SET is_read = TRUE WHERE id = ?", nid);
     }
 
-    public int getApplicationUserId(int applicationId) {
+    public void give_feedback(int aid, String fbk) {
+        db_tpl.update("UPDATE applications SET feedback = ? WHERE id = ?", fbk, aid);
+    }
+
+    public int find_uid(int aid) {
         try {
-            return jdbc.queryForObject("SELECT user_id FROM applications WHERE id = ?", Integer.class, applicationId);
-        } catch (Exception e) {
+            return db_tpl.queryForObject("SELECT user_id FROM applications WHERE id = ?", Integer.class, aid);
+        } catch (Exception ex) {
             return -1;
         }
     }
 
-    public void setUserResetToken(String username, String token) {
-        jdbc.update("UPDATE users SET reset_token = ? WHERE username = ?", token, username);
+    public void save_reset_token(String usr, String tok) {
+        db_tpl.update("UPDATE users SET reset_token = ? WHERE username = ?", tok, usr);
     }
 
-    public boolean resetPassword(String token, String newPassword) {
-        int updated = jdbc.update("UPDATE users SET password = ?, reset_token = NULL WHERE reset_token = ?", newPassword, token);
-        return updated > 0;
+    public boolean do_pw_reset(String tok, String pass) {
+        int rows = db_tpl.update("UPDATE users SET password = ?, reset_token = NULL WHERE reset_token = ?", pass, tok);
+        return rows > 0;
     }
 
-    // ===================== ADMIN NOTES METHODS =====================
+    // --- TRAJECTORY ---
 
-    public void addAdminNote(int userId, String note) {
-        jdbc.update("INSERT INTO admin_notes (user_id, note) VALUES (?, ?)", userId, note);
-    }
-
-    public List<Map<String, Object>> getAdminNotesForUser(int userId) {
-        return jdbc.queryForList(
-            "SELECT id AS \"id\", user_id AS \"user_id\", note AS \"note\", created_at AS \"created_at\" " +
-            "FROM admin_notes WHERE user_id = ? ORDER BY created_at DESC", 
-            userId
+    public void save_snapshot(int uid, String fname, int java_sc, int web_sc, int py_sc, int cpp_sc, int devops_sc, int db_sc, int exp) {
+        db_tpl.update(
+            "INSERT INTO resume_snapshots (user_id, filename, java_sc, web_sc, python_sc, cpp_sc, devops_sc, db_sc, exp_yrs) VALUES (?,?,?,?,?,?,?,?,?)",
+            uid, fname, java_sc, web_sc, py_sc, cpp_sc, devops_sc, db_sc, exp
         );
+    }
+
+    public List<Map<String, Object>> get_snapshots(int uid) {
+        return db_tpl.queryForList(
+            "SELECT id AS \"id\", filename AS \"filename\", java_sc AS \"java_sc\", web_sc AS \"web_sc\", " +
+            "python_sc AS \"python_sc\", cpp_sc AS \"cpp_sc\", devops_sc AS \"devops_sc\", db_sc AS \"db_sc\", " +
+            "exp_yrs AS \"exp_yrs\", uploaded_at AS \"uploaded_at\" " +
+            "FROM resume_snapshots WHERE user_id = ? ORDER BY uploaded_at ASC", uid
+        );
+    }
+
+    // --- BATTLE ---
+
+    public List<Map<String, Object>> get_all_users_with_resume() {
+        return db_tpl.queryForList(
+            "SELECT id AS \"id\", username AS \"username\", full_name AS \"full_name\", " +
+            "resume_text AS \"resume_text\", resume_filename AS \"resume_filename\" " +
+            "FROM users WHERE resume_text IS NOT NULL AND resume_text != ''"
+        );
+    }
+
+    // --- NOTES ---
+
+    public void add_note(int uid, String raw_note) {        db_tpl.update("INSERT INTO admin_notes (user_id, note) VALUES (?, ?)", uid, raw_note);
+    }
+
+    public List<Map<String, Object>> get_notes(int uid) {
+        return db_tpl.queryForList("SELECT id AS \"id\", user_id AS \"user_id\", note AS \"note\", created_at AS \"created_at\" FROM admin_notes WHERE user_id = ? ORDER BY created_at DESC", uid);
     }
 }

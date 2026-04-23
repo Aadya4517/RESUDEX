@@ -6,108 +6,111 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.geom.RoundRectangle2D;
 
+/**
+ * flashy alerts.
+ */
 public class ToastNotification extends JDialog {
-    private String message;
-    private float opacity = 0f;
-    private final float maxOpacity = 0.9f;
-    private Timer fadeInTimer;
-    private Timer fadeOutTimer;
+    private String txt;
+    private float al = 0f;
+    private final float al_max = 0.9f;
+    private Timer t_in;
+    private Timer t_out;
 
-    public static void show(Component parent, String message, boolean isSuccess) {
-        new ToastNotification(parent, message, isSuccess);
+    public static void pop(Component p, String txt, boolean ok) {
+        new ToastNotification(p, txt, ok);
     }
 
-    private ToastNotification(Component parent, String message, boolean isSuccess) {
-        this.message = message;
+    private ToastNotification(Component p, String txt, boolean ok) {
+        this.txt = txt;
         
         setUndecorated(true);
         setAlwaysOnTop(true);
         setFocusableWindowState(false);
         setBackground(new Color(0, 0, 0, 0));
 
-        JLabel label = new JLabel(message);
-        label.setFont(new Font("SansSerif", Font.BOLD, 14));
-        label.setForeground(Color.WHITE);
-        label.setOpaque(false);
+        JLabel lbl = new JLabel(txt);
+        lbl.setFont(new Font("SansSerif", Font.BOLD, 14));
+        lbl.setForeground(Color.WHITE);
+        lbl.setOpaque(false);
 
-        JPanel panel = new JPanel(new BorderLayout()) {
+        JPanel pan = new JPanel(new BorderLayout()) {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                if (isSuccess) {
-                    g2.setColor(new Color(40, 160, 110, (int) (opacity * 255))); // Green
+                if (ok) {
+                    g2.setColor(new Color(40, 160, 110, (int) (al * 255))); 
                 } else {
-                    g2.setColor(new Color(220, 60, 60, (int) (opacity * 255))); // Red
+                    g2.setColor(new Color(220, 60, 60, (int) (al * 255))); 
                 }
                 g2.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), 15, 15));
                 g2.dispose();
             }
         };
-        panel.setOpaque(false);
-        panel.setBorder(BorderFactory.createEmptyBorder(15, 25, 15, 25));
-        panel.add(label, BorderLayout.CENTER);
+        pan.setOpaque(false);
+        pan.setBorder(BorderFactory.createEmptyBorder(15, 25, 15, 25));
+        pan.add(lbl, BorderLayout.CENTER);
 
-        add(panel);
+        add(pan);
         pack();
 
-        // Compute location
-        Window window = SwingUtilities.getWindowAncestor(parent);
-        if (window != null) {
-            int x = window.getX() + (window.getWidth() - getWidth()) / 2;
-            int y = window.getY() + window.getHeight() - getHeight() - 50; // Near bottom
+        // location
+        Window win = SwingUtilities.getWindowAncestor(p);
+        if (win != null) {
+            int x = win.getX() + (win.getWidth() - getWidth()) / 2;
+            int y = win.getY() + win.getHeight() - getHeight() - 50; 
             setLocation(x, y);
         } else {
-            Dimension dim = Toolkit.getDefaultToolkit().getScreenSize();
-            int x = (dim.width - getWidth()) / 2;
-            int y = dim.height - getHeight() - 100;
+            Dimension d = Toolkit.getDefaultToolkit().getScreenSize();
+            int x = (d.width - getWidth()) / 2;
+            int y = d.height - getHeight() - 100;
             setLocation(x, y);
         }
 
         setVisible(true);
-        startAnimations();
+        run_fx();
     }
 
-    private void startAnimations() {
-        fadeInTimer = new Timer(20, new ActionListener() {
+    private void run_fx() {
+        t_in = new Timer(20, new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                opacity += 0.05f;
-                if (opacity >= maxOpacity) {
-                    opacity = maxOpacity;
-                    fadeInTimer.stop();
-                    startWait();
+                al += 0.05f;
+                if (al >= al_max) {
+                    al = al_max;
+                    t_in.stop();
+                    hold();
                 }
                 repaint();
             }
         });
-        fadeInTimer.start();
+        t_in.start();
     }
 
-    private void startWait() {
-        Timer waitTimer = new Timer(2500, new ActionListener() {
+    private void hold() {
+        Timer t_wait = new Timer(2500, new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                startFadeOut();
+                run_fade();
             }
         });
-        waitTimer.setRepeats(false);
-        waitTimer.start();
+        t_wait.setRepeats(false);
+        t_wait.start();
     }
 
-    private void startFadeOut() {
-        fadeOutTimer = new Timer(20, new ActionListener() {
+    private void run_fade() {
+        t_out = new Timer(20, new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                opacity -= 0.05f;
-                if (opacity <= 0) {
-                    opacity = 0;
-                    fadeOutTimer.stop();
+                al -= 0.05f;
+                if (al <= 0) {
+                    al = 0;
+                    t_out.stop();
                     dispose();
                 }
                 repaint();
             }
         });
-        fadeOutTimer.start();
+        t_out.start();
     }
 }

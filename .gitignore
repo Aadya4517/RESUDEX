@@ -50,3 +50,7 @@ buildNumber.properties
 # Project specific
 data/
 resudexdb.*
+*.mv.db
+*.trace.db
+*.lock.db
+*.pdf

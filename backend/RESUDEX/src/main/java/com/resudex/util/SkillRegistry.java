@@ -24,22 +24,35 @@ public class SkillRegistry {
         SKILLS.put("react", SkillCategory.WEB);
         SKILLS.put("angular", SkillCategory.WEB);
         SKILLS.put("node.js", SkillCategory.WEB);
+        SKILLS.put("next.js", SkillCategory.WEB);
+        SKILLS.put("tailwind", SkillCategory.WEB);
 
         // Backend
         SKILLS.put("spring", SkillCategory.BACKEND);
         SKILLS.put("spring boot", SkillCategory.BACKEND);
         SKILLS.put("rest", SkillCategory.BACKEND);
         SKILLS.put("microservices", SkillCategory.BACKEND);
+        SKILLS.put("node", SkillCategory.BACKEND);
 
-        // Data / Python Stack
+        // Data / Python Stack / AI
         SKILLS.put("pandas", SkillCategory.DATA);
         SKILLS.put("numpy", SkillCategory.DATA);
         SKILLS.put("data analysis", SkillCategory.DATA);
+        SKILLS.put("generative ai", SkillCategory.DATA);
+        SKILLS.put("llm", SkillCategory.DATA);
+        SKILLS.put("langchain", SkillCategory.DATA);
+        SKILLS.put("pinecone", SkillCategory.DATA);
+        SKILLS.put("vector db", SkillCategory.DATA);
 
-        // DevOps
+        // DevOps / Cloud
         SKILLS.put("docker", SkillCategory.DEVOPS);
         SKILLS.put("git", SkillCategory.DEVOPS);
         SKILLS.put("linux", SkillCategory.DEVOPS);
+        SKILLS.put("aws", SkillCategory.DEVOPS);
+        SKILLS.put("gcp", SkillCategory.DEVOPS);
+        SKILLS.put("azure", SkillCategory.DEVOPS);
+        SKILLS.put("terraform", SkillCategory.DEVOPS);
+        SKILLS.put("serverless", SkillCategory.DEVOPS);
     }
 
     public static SkillCategory getCategory(String skill) {

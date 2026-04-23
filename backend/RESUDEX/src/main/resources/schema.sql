@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
     username   VARCHAR(100) UNIQUE NOT NULL,
     password   VARCHAR(100) NOT NULL,
     resume_filename VARCHAR(255),
-    resume_text    CLOB,
+    resume_text    VARCHAR(65535),
     full_name      VARCHAR(100),
     email          VARCHAR(100),
     bio            TEXT,

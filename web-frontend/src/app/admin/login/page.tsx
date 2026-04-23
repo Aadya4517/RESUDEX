@@ -5,8 +5,8 @@ import { ShieldCheck, Lock, User, ArrowRight } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 
 export default function AdminLogin() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("admin");
+  const [password, setPassword] = useState("admin123");
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();

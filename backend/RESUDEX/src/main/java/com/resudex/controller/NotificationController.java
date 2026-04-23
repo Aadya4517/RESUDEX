@@ -8,22 +8,25 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Controller for notifications.
+ */
 @RestController
 @RequestMapping("/api/notifications")
 @CrossOrigin
 public class NotificationController {
 
     @Autowired
-    private DatabaseService db;
+    private DatabaseService app_db;
 
-    @GetMapping("/{userId}")
-    public List<Map<String, Object>> getNotifications(@PathVariable int userId) {
-        return db.getUnreadNotifications(userId);
+    @GetMapping("/new_for/{uid}")
+    public List<Map<String, Object>> list_new(@PathVariable int uid) {
+        return app_db.get_unread(uid);
     }
 
-    @PostMapping("/read/{id}")
-    public ResponseEntity<Map<String, Object>> markRead(@PathVariable int id) {
-        db.markNotificationRead(id);
-        return ResponseEntity.ok(Map.of("message", "Notification marked as read"));
+    @PostMapping("/dismiss/{nid}")
+    public ResponseEntity<Map<String, Object>> done_notif(@PathVariable int nid) {
+        app_db.seen_notif(nid);
+        return ResponseEntity.ok(Map.of("message", "Dismissed"));
     }
 }

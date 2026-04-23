@@ -7,12 +7,10 @@ import {
   Users, 
   Briefcase, 
   Plus, 
-  Search, 
   ChevronRight, 
   TrendingUp,
   Mail,
   Zap,
-  CheckCircle2,
   X
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -25,127 +23,146 @@ interface Job {
   description: string;
 }
 
-interface Applicant {
-  id: number;
+interface AppEntry {
+  id: number; // user id
   username: string;
   full_name: string;
-  score: number;
-  matchedSkills: string[];
-  missingSkills: string[];
-  techScore: number;
-  application_id: number;
+  sc: number;
+  hits: string[];
+  miss: string[];
+  tech_sc: number;
+  app_id: number; // matching backend key
   status: string;
+  vibes: string;
 }
 
+/**
+ * Admin Panel.
+ * For recruiters to manage jobs and move candidates through the pipe.
+ */
 export default function AdminDashboard() {
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
-  const [applicants, setApplicants] = useState<Applicant[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<"jobs" | "applicants">("jobs");
-  const [activeNoteApp, setActiveNoteApp] = useState<number | null>(null);
-  const [noteText, setNoteText] = useState("");
-  const [candidateNotes, setCandidateNotes] = useState<any[]>([]);
+  const [job_data, set_job_data] = useState<Job[]>([]);
+  const [cur_job, set_cur_job] = useState<Job | null>(null);
+  const [app_list, set_app_list] = useState<AppEntry[]>([]);
+  const [wait, set_wait] = useState(true);
+  const [mode, set_mode] = useState<"jobs" | "apps">("jobs");
+  const [expanded_aid, set_expanded_aid] = useState<number | null>(null);
+  const [msg_text, set_msg_text] = useState("");
+  const [user_notes, set_user_notes] = useState<any[]>([]);
 
-  const KANBAN_STAGES = ["APPLIED", "SCREENING", "INTERVIEWING", "OFFERED", "REJECTED"];
+  const PIPE_STAGES = ["APPLIED", "SCREENING", "INTERVIEWING", "OFFERED", "REJECTED"];
+  const VIBES = ["Wizard", "Grit", "Cultural Fit", "Fast Learner", "Problem Solver"];
 
   useEffect(() => {
-    fetchJobs();
+    load_jobs();
   }, []);
 
-  const fetchJobs = async () => {
+  const toggle_vibe = async (aid: number, v: string) => {
+    const app = app_list.find(a => a.app_id === aid);
+    if (!app) return;
+    
+    let cur = app.vibes ? app.vibes.split(",") : [];
+    if (cur.includes(v)) cur = cur.filter(x => x !== v);
+    else cur.push(v);
+    
+    const next = cur.join(",");
+    set_app_list(prev => prev.map(a => a.app_id === aid ? { ...a, vibes: next } : a));
+    
     try {
-      const res = await axios.get("http://localhost:8080/api/jobs");
-      setJobs(res.data);
-      setLoading(false);
+      await axios.post("http://localhost:8080/api/applications/set_vibes", { aid: aid, v: next });
     } catch (e) {}
   };
 
-  const fetchApplicants = async (jobId: number) => {
+  const load_jobs = async () => {
     try {
-      const res = await axios.get(`http://localhost:8080/api/jobs/${jobId}/applicants`);
-      setApplicants(res.data);
-      setView("applicants");
+      const res = await axios.get("http://localhost:8080/api/jobs/list");
+      set_job_data(res.data);
+      set_wait(false);
     } catch (e) {}
   };
 
-  const selectCandidate = async (appId: number) => {
+  const load_apps = async (jid: number) => {
     try {
-      await axios.post(`http://localhost:8080/api/applicants/${appId}/select`);
-      alert("Candidate Shortlisted! Notification sent.");
-      if (selectedJob) fetchApplicants(selectedJob.id);
+      const res = await axios.get(`http://localhost:8080/api/jobs/apps_for/${jid}`);
+      set_app_list(res.data);
+      set_mode("apps");
     } catch (e) {}
   };
 
-  const handleDragStart = (e: React.DragEvent, appId: number) => {
-    e.dataTransfer.setData("appId", appId.toString());
+  const shortlist = async (aid: number) => {
+    try {
+      await axios.post(`http://localhost:8080/api/applicants/ok/${aid}`);
+      if (cur_job) load_apps(cur_job.id);
+    } catch (e) {}
   };
 
-  const handleDrop = async (e: React.DragEvent, newStatus: string) => {
+  const start_drag = (e: React.DragEvent, aid: number) => {
+    e.dataTransfer.setData("aid", aid.toString());
+  };
+
+  const drop_it = async (e: React.DragEvent, s: string) => {
     e.preventDefault();
-    const appIdStr = e.dataTransfer.getData("appId");
-    if (!appIdStr) return;
-    const appId = parseInt(appIdStr);
+    const id_str = e.dataTransfer.getData("aid");
+    if (!id_str) return;
+    const aid = parseInt(id_str);
     
-    setApplicants(prev => prev.map(app => app.application_id === appId ? { ...app, status: newStatus } : app));
+    set_app_list(prev => prev.map(a => a.app_id === aid ? { ...a, status: s } : a));
     
     try {
-      await axios.put(`http://localhost:8080/api/applications/${appId}/status`, { status: newStatus });
+      await axios.put(`http://localhost:8080/api/applications/set_state/${aid}`, { status: s });
     } catch (err) {}
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const over_it = (e: React.DragEvent) => {
     e.preventDefault();
   };
 
-  const viewNotes = async (userId: number, appId: number) => {
-    if (activeNoteApp === appId) {
-      setActiveNoteApp(null);
+  const show_notes = async (uid: number, aid: number) => {
+    if (expanded_aid === aid) {
+      set_expanded_aid(null);
       return;
     }
-    setActiveNoteApp(appId);
+    set_expanded_aid(aid);
     try {
-      const res = await axios.get(`http://localhost:8080/api/users/${userId}/notes`);
-      setCandidateNotes(res.data);
+      const res = await axios.get(`http://localhost:8080/api/usr/notes/${uid}`);
+      set_user_notes(res.data);
     } catch (e) {}
   };
 
-  const submitNote = async (userId: number) => {
-    if (!noteText.trim()) return;
+  const add_note = async (uid: number) => {
+    if (!msg_text.trim()) return;
     try {
-      await axios.post(`http://localhost:8080/api/users/${userId}/notes`, { note: noteText });
-      setNoteText("");
-      // Refresh notes
-      const res = await axios.get(`http://localhost:8080/api/users/${userId}/notes`);
-      setCandidateNotes(res.data);
+      await axios.post(`http://localhost:8080/api/usr/notes/${uid}`, { note: msg_text });
+      set_msg_text("");
+      const res = await axios.get(`http://localhost:8080/api/usr/notes/${uid}`);
+      set_user_notes(res.data);
     } catch (e) {}
   };
-
 
   return (
     <div className="flex min-h-screen bg-[#060012] text-white">
-      {/* --- Sidebar --- */}
+      {/* --- Nav --- */}
       <aside className="w-64 border-r border-indigo-500/10 bg-[#060012]/80 backdrop-blur-3xl p-6 flex flex-col fixed h-full z-20">
-        <div className="flex items-center gap-3 mb-10 px-2 cursor-pointer" onClick={() => { setView("jobs"); setSelectedJob(null); }}>
+        <div className="flex items-center gap-3 mb-10 px-2 cursor-pointer" onClick={() => { set_mode("jobs"); set_cur_job(null); }}>
           <ShieldCheck className="text-indigo-400 w-8 h-8 fill-indigo-400/20" />
-          <h1 className="text-2xl font-black tracking-tighter">RESUDEX <span className="text-indigo-400">ADM</span></h1>
+          <h1 className="text-2xl font-black tracking-tighter text-indigo-400">ADM CENTER</h1>
         </div>
 
         <nav className="flex-1 space-y-2">
-          <SidebarItem icon={<Briefcase size={20}/>} label="Job Listings" active={view === "jobs"} onClick={() => setView("jobs")} />
-          <SidebarItem icon={<Users size={20}/>} label="Talent Pool" />
-          <SidebarItem icon={<TrendingUp size={20}/>} label="Analytics" />
+          <SidebarItem icon={<Briefcase size={20}/>} label="Listings" active={mode === "jobs"} onClick={() => set_mode("jobs")} />
+          <SidebarItem icon={<Users size={20}/>} label="Pool" />
+          <SidebarItem icon={<TrendingUp size={20}/>} label="Stats" />
         </nav>
 
         <div className="pt-6 border-t border-white/5">
-          <SidebarItem icon={<Mail size={20}/>} label="Recruiter Support" />
+          <SidebarItem icon={<Mail size={20}/>} label="Help" />
         </div>
       </aside>
 
-      {/* --- Main Content --- */}
+      {/* --- Main Section --- */}
       <main className="flex-1 pl-64 overflow-y-auto p-12 min-h-screen">
         <AnimatePresence mode="wait">
-          {view === "jobs" ? (
+          {mode === "jobs" ? (
             <motion.section 
               key="jobs"
               initial={{ opacity: 0, x: -20 }}
@@ -155,25 +172,25 @@ export default function AdminDashboard() {
               <div className="flex justify-between items-center mb-12">
                 <div>
                   <h2 className="text-3xl font-black mb-2 flex items-center gap-2">
-                    Active Listings <Zap className="text-indigo-400 fill-indigo-400/20" size={24}/>
+                    Openings <Zap className="text-indigo-400 fill-indigo-400/20" size={24}/>
                   </h2>
-                  <p className="text-slate-400 font-medium">Manage job postings and screen top-tier talent.</p>
+                  <p className="text-slate-400 font-medium">Screen candidates for your active jobs.</p>
                 </div>
-                <button className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 transition-all shadow-[0_0_20px_rgba(79,70,229,0.2)]">
-                  <Plus size={20}/> CREATE JOB
+                <button className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 transition-all">
+                  <Plus size={20}/> NEW JOB
                 </button>
               </div>
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                {jobs.map((job, idx) => (
-                  <GlassCard key={job.id} className="group relative border-indigo-500/5 hover:border-indigo-500/30">
-                    <h3 className="text-xl font-bold mb-2 group-hover:text-indigo-400 transition-colors uppercase tracking-tight">{job.title}</h3>
-                    <p className="text-slate-400 text-sm mb-6 line-clamp-2 h-10">{job.description}</p>
+                {job_data.map((j) => (
+                  <GlassCard key={j.id} className="group relative border-indigo-500/5 hover:border-indigo-500/30">
+                    <h3 className="text-xl font-bold mb-2 group-hover:text-indigo-400 transition-colors uppercase tracking-tight">{j.title}</h3>
+                    <p className="text-slate-400 text-sm mb-6 line-clamp-2 h-10">{j.description}</p>
                     <button 
-                      onClick={() => { setSelectedJob(job); fetchApplicants(job.id); }}
+                      onClick={() => { set_cur_job(j); load_apps(j.id); }}
                       className="w-full bg-white/5 hover:bg-indigo-500/10 border border-white/5 hover:border-indigo-500/30 rounded-xl py-3 font-black text-xs tracking-widest flex items-center justify-center gap-2 transition-all"
                     >
-                      RANK APPLICANTS <ChevronRight size={16}/>
+                      SEE CANDIDATES <ChevronRight size={16}/>
                     </button>
                   </GlassCard>
                 ))}
@@ -187,71 +204,85 @@ export default function AdminDashboard() {
               exit={{ opacity: 0, x: -20 }}
             >
               <div className="flex items-center gap-4 mb-8">
-                <button onClick={() => setView("jobs")} className="p-3 bg-white/5 rounded-xl hover:bg-white/10 text-indigo-400">
-                  <ArrowBackIcon size={20}/>
+                <button onClick={() => set_mode("jobs")} className="p-3 bg-white/5 rounded-xl hover:bg-white/10 text-indigo-400">
+                  <BackIcon size={20}/>
                 </button>
                 <div>
-                  <h2 className="text-3xl font-black">{selectedJob?.title}</h2>
-                  <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">AI Ranked Talent Pool</p>
+                  <h2 className="text-3xl font-black">{cur_job?.title}</h2>
+                  <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Candidates Feed</p>
                 </div>
               </div>
 
               <div className="flex gap-6 overflow-x-auto pb-8 h-[calc(100vh-250px)]">
-                {KANBAN_STAGES.map((stage) => (
+                {PIPE_STAGES.map((s) => (
                   <div 
-                    key={stage} 
+                    key={s} 
                     className="flex-shrink-0 w-[400px] bg-white/5 border border-white/5 rounded-2xl flex flex-col"
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, stage)}
+                    onDragOver={over_it}
+                    onDrop={(e) => drop_it(e, s)}
                   >
                     <div className="p-4 border-b border-white/10 flex justify-between items-center bg-black/20 rounded-t-2xl">
-                      <h4 className="font-bold text-slate-300 tracking-wider text-sm">{stage}</h4>
+                      <h4 className="font-bold text-slate-300 tracking-wider text-sm">{s}</h4>
                       <span className="text-xs bg-white/10 px-2 py-0.5 rounded-full font-black text-slate-400">
-                        {applicants.filter(a => (a.status || 'APPLIED').toUpperCase() === stage).length}
+                        {app_list.filter(a => (a.status || 'APPLIED').toUpperCase() === s).length}
                       </span>
                     </div>
 
                     <div className="flex-1 p-4 space-y-4 overflow-y-auto">
-                      {applicants
-                        .filter(a => (a.status || 'APPLIED').toUpperCase() === stage)
+                      {app_list
+                        .filter(a => (a.status || 'APPLIED').toUpperCase() === s)
                         .map(app => (
                         <div 
-                          key={app.id} 
+                          key={app.app_id} 
                           draggable 
-                          onDragStart={(e) => handleDragStart(e, app.application_id)}
+                          onDragStart={(e) => start_drag(e, app.app_id)}
                           className="bg-[#0D0221] border border-indigo-500/10 p-5 rounded-xl cursor-grab active:cursor-grabbing hover:border-indigo-500/40 transition-colors relative"
                         >
                           <div className="absolute top-4 right-4">
-                            <MatchBadge score={app.score} />
+                            <MatchBadge score={app.sc} />
                           </div>
                           
                           <h5 className="font-black text-lg mb-1">{app.full_name || app.username}</h5>
-                          {app.techScore > 70 && <span className="bg-yellow-500/10 text-yellow-500 text-[10px] font-black px-2 py-0.5 rounded-md border border-yellow-500/20 mb-2 inline-block">TOP TECH SCORE</span>}
+                          {app.tech_sc > 70 && <span className="bg-yellow-500/10 text-yellow-500 text-[10px] font-black px-2 py-0.5 rounded-md border border-yellow-500/20 mb-2 inline-block">PRO SCORE</span>}
                           
-                          <div className="flex flex-wrap gap-1 mt-2 mb-4">
-                            {app.matchedSkills.slice(0, 3).map(skill => (
+                          <div className="flex flex-wrap gap-1 mt-2 mb-3">
+                            {app.hits.slice(0, 3).map(skill => (
                               <span key={skill} className="text-[9px] font-bold px-2 py-0.5 bg-indigo-500/10 text-indigo-300 rounded uppercase">{skill}</span>
                             ))}
                           </div>
 
+                          <div className="flex flex-wrap gap-1 mb-4 border-t border-white/5 pt-3">
+                            {VIBES.map(v => {
+                              const active = app.vibes?.split(",").includes(v);
+                              return (
+                                <button 
+                                  key={v}
+                                  onClick={() => toggle_vibe(app.app_id, v)}
+                                  className={`text-[8px] font-black px-2 py-1 rounded-md transition-all ${active ? 'bg-indigo-500 text-white' : 'bg-white/5 text-slate-500 hover:text-slate-300'}`}
+                                >
+                                  {v.toUpperCase()}
+                                </button>
+                              );
+                            })}
+                          </div>
+
                           <div className="flex gap-2 mt-4 pt-4 border-t border-white/5">
                              <button
-                               onClick={() => window.open(`http://localhost:8080/api/resume/export/${app.id}`)}
+                               onClick={() => window.open(`http://localhost:8080/api/resume/get_pdf/${app.id}`)}
                                className="flex-1 py-2 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 rounded text-[10px] font-black tracking-widest transition-colors"
                              >
-                               PDF EXPORT
+                               PDF
                              </button>
                              <button 
-                               onClick={() => viewNotes(app.id, app.application_id)}
+                               onClick={() => show_notes(app.id, app.app_id)}
                                className="flex-1 py-2 bg-white/5 hover:bg-white/10 text-slate-300 rounded text-[10px] font-black tracking-widest transition-colors"
                              >
-                               {activeNoteApp === app.application_id ? "HIDE NOTES" : "NOTES"}
+                               {expanded_aid === app.app_id ? "HIDE" : "NOTES"}
                              </button>
                           </div>
 
-                          {/* Recruiter Notes Inline Expand */}
                           <AnimatePresence>
-                            {activeNoteApp === app.application_id && (
+                            {expanded_aid === app.app_id && (
                               <motion.div 
                                 initial={{ height: 0, opacity: 0 }}
                                 animate={{ height: 'auto', opacity: 1 }}
@@ -259,10 +290,10 @@ export default function AdminDashboard() {
                                 className="mt-4 pt-4 border-t border-white/10 overflow-hidden"
                               >
                                 <div className="space-y-2 mb-4 max-h-32 overflow-y-auto pr-1">
-                                  {candidateNotes.length === 0 ? (
-                                    <p className="text-xs text-slate-500 italic">No notes yet.</p>
+                                  {user_notes.length === 0 ? (
+                                    <p className="text-xs text-slate-500 italic">Fresh slate.</p>
                                   ) : (
-                                    candidateNotes.map(n => (
+                                    user_notes.map(n => (
                                       <div key={n.id} className="bg-white/5 p-2 rounded border border-white/5">
                                         <p className="text-xs text-slate-300">{n.note}</p>
                                         <p className="text-[10px] text-slate-500 mt-1">{new Date(n.created_at).toLocaleDateString()}</p>
@@ -273,16 +304,15 @@ export default function AdminDashboard() {
                                 <div className="flex gap-2">
                                   <input 
                                     className="flex-1 bg-black/30 border border-white/10 rounded px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                                    placeholder="Add a private note..."
-                                    value={noteText}
-                                    onChange={(e) => setNoteText(e.target.value)}
+                                    placeholder="Type here..."
+                                    value={msg_text}
+                                    onChange={(e) => set_msg_text(e.target.value)}
                                   />
-                                  <button onClick={() => submitNote(app.id)} className="bg-indigo-600 px-3 rounded font-black text-[10px]">ADD</button>
+                                  <button onClick={() => add_note(app.id)} className="bg-indigo-600 px-3 rounded font-black text-[10px]">ADD</button>
                                 </div>
                               </motion.div>
                             )}
                           </AnimatePresence>
-
                         </div>
                       ))}
                     </div>
@@ -309,7 +339,7 @@ function SidebarItem({ icon, label, active = false, onClick = () => {} }: { icon
   );
 }
 
-function ArrowBackIcon({ size }: { size: number }) {
+function BackIcon({ size }: { size: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M19 12H5M11 18l-6-6 6-6"/>

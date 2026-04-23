@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * UserController - manages user profiles.
+ * Handles user profile stuff.
  */
 @RestController
 @RequestMapping("/api/users")
@@ -17,55 +17,40 @@ import java.util.Map;
 public class UserController {
 
     @Autowired
-    private DatabaseService db;
+    private DatabaseService app_db;
 
-    @PostMapping("/register")
-    public ResponseEntity<Map<String, String>> register(@RequestBody Map<String, String> body) {
-        String username = body.get("username");
-        String password = body.get("password");
-        String fullName = body.get("fullName");
-        String email    = body.get("email");
-
-        boolean success = db.registerUser(username, password, fullName, email);
-        if (success) {
-            return ResponseEntity.ok(Map.of("message", "User registered successfully"));
+    @GetMapping("/see/{uid}")
+    public ResponseEntity<Map<String, Object>> see_me(@PathVariable int uid) {
+        Map<String, Object> u = app_db.get_usr_by_id(uid);
+        if (u != null) {
+            return ResponseEntity.ok(u);
         } else {
-            return ResponseEntity.status(400).body(Map.of("message", "Registration failed. Username may be taken."));
+            return ResponseEntity.status(404).body(Map.of("err", "No such user"));
         }
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> getUserProfile(@PathVariable int id) {
-        Map<String, Object> user = db.getUserById(id);
-        if (user != null) {
-            return ResponseEntity.ok(user);
-        } else {
-            return ResponseEntity.status(404).body(Map.of("error", "User not found"));
+    @PutMapping("/edit/{uid}")
+    public ResponseEntity<Map<String, Object>> edit_me(@PathVariable int uid, @RequestBody Map<String, String> info) {
+        String name = info.getOrDefault("full_name", "");
+        String mail = info.getOrDefault("email", "");
+        String b = info.getOrDefault("bio", "");
+
+        app_db.update_profile(uid, name, mail, b);
+        return ResponseEntity.ok(Map.of("msg", "Saved"));
+    }
+
+    @PostMapping("/note/to/{uid}")
+    public ResponseEntity<Map<String, String>> put_note(@PathVariable int uid, @RequestBody Map<String, String> data) {
+        String n = data.get("note");
+        if (n != null && !n.trim().isEmpty()) {
+            app_db.add_note(uid, n.trim());
+            return ResponseEntity.ok(Map.of("msg", "Added"));
         }
+        return ResponseEntity.badRequest().body(Map.of("err", "Empty note"));
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> updateProfile(@PathVariable int id, @RequestBody Map<String, String> body) {
-        String fullName = body.getOrDefault("full_name", "");
-        String email    = body.getOrDefault("email", "");
-        String bio      = body.getOrDefault("bio", "");
-
-        db.updateUserProfile(id, fullName, email, bio);
-        return ResponseEntity.ok(Map.of("message", "Profile updated successfully"));
-    }
-
-    @PostMapping("/{id}/notes")
-    public ResponseEntity<Map<String, String>> addAdminNote(@PathVariable int id, @RequestBody Map<String, String> body) {
-        String note = body.get("note");
-        if (note != null && !note.trim().isEmpty()) {
-            db.addAdminNote(id, note.trim());
-            return ResponseEntity.ok(Map.of("message", "Note added successfully"));
-        }
-        return ResponseEntity.badRequest().body(Map.of("error", "Note cannot be empty"));
-    }
-
-    @GetMapping("/{id}/notes")
-    public ResponseEntity<List<Map<String, Object>>> getAdminNotes(@PathVariable int id) {
-        return ResponseEntity.ok(db.getAdminNotesForUser(id));
+    @GetMapping("/note/of/{uid}")
+    public ResponseEntity<List<Map<String, Object>>> list_notes(@PathVariable int uid) {
+        return ResponseEntity.ok(app_db.get_notes(uid));
     }
 }

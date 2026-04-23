@@ -5,52 +5,65 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Zap, Mail, Lock, User, ArrowRight, CheckCircle2, AlertCircle } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 
+/**
+ * Authentication Page.
+ * Handles the login/signup logic for the app.
+ */
 export default function AuthPage() {
-  const [isLogin, setIsLogin] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [is_login, set_is_login] = useState(true);
+  const [is_busy, set_is_busy] = useState(false);
+  const [err_msg, set_err_msg] = useState<string | null>(null);
+  const [is_done, set_is_done] = useState(false);
 
-  // Form States
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [email, setEmail] = useState("");
-  const [fullName, setFullName] = useState("");
+  // local form data
+  const [usr, set_usr] = useState("");
+  const [pass, set_pass] = useState("");
+  const [mail, set_mail] = useState("");
+  const [fname, set_fname] = useState("");
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const do_auth = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
+    set_is_busy(true);
+    set_err_msg(null);
 
     try {
-      if (isLogin) {
-        const res = await axios.post("http://localhost:8080/api/auth/login", { username, password });
-        // In a real app, save JWT. Here we just redirect.
+      if (is_login) {
+        // use the new snake_case endpoint
+        const res = await axios.post("http://localhost:8080/api/auth/log_in", { 
+          usr: usr, 
+          pwd: pass 
+        });
+        
+        // save the user metadata in sync
+        localStorage.setItem("uid", res.data.uid);
+        localStorage.setItem("usr", res.data.usr);
+        
         window.location.href = "/dashboard";
       } else {
-        await axios.post("http://localhost:8080/api/users/register", {
-          username,
-          password,
-          email,
-          fullName
+        // registration flow
+        await axios.post("http://localhost:8080/api/auth/register_usr", {
+          usr: usr,
+          pwd: pass,
+          email: mail,
+          f_name: fname
         });
-        setSuccess(true);
+        set_is_done(true);
         setTimeout(() => {
-          setIsLogin(true);
-          setSuccess(false);
+          set_is_login(true);
+          set_is_done(false);
         }, 2000);
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || "Authentication failed. Please check your credentials.");
-      console.error("Auth Error:", err);
+      set_err_msg(err.response?.data?.error || "Auth fails. Check logic.");
+      console.error("Auth Err:", err);
     } finally {
-      setLoading(false);
+      set_is_busy(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-[#060012] flex flex-col items-center justify-center p-6 relative overflow-hidden">
-      {/* Background Glows (Auth Style) */}
+      {/* lights in the back */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#00F0FF]/10 blur-[150px] rounded-full" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-[#F72585]/10 blur-[150px] rounded-full" />
 
@@ -66,7 +79,7 @@ export default function AuthPage() {
 
       <div className="relative w-full max-w-md">
         <AnimatePresence mode="wait">
-          {success ? (
+          {is_done ? (
             <motion.div 
               key="success"
               initial={{ opacity: 0, scale: 0.9 }}
@@ -76,66 +89,66 @@ export default function AuthPage() {
             >
               <CheckCircle2 size={64} className="text-[#00F0FF] mb-6 animate-bounce" />
               <h2 className="text-3xl font-black mb-2">You're In!</h2>
-              <p className="text-slate-400 font-medium">Account created. Redirecting to sign in...</p>
+              <p className="text-slate-400 font-medium">Redirecting to sign in...</p>
             </motion.div>
           ) : (
             <motion.div
-              key={isLogin ? "login" : "register"}
-              initial={{ x: isLogin ? -20 : 20, opacity: 0 }}
+              key={is_login ? "login" : "register"}
+              initial={{ x: is_login ? -20 : 20, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
-              exit={{ x: isLogin ? 20 : -20, opacity: 0 }}
+              exit={{ x: is_login ? 20 : -20, opacity: 0 }}
               transition={{ type: "spring", damping: 20, stiffness: 300 }}
             >
               <GlassCard className="p-10 border-[#00F0FF]/5" hoverGlow={false}>
                 <div className="mb-10 text-center">
-                  <h2 className="text-3xl font-black mb-2 lowercase">{isLogin ? "Welcome Back" : "New Account"}</h2>
+                  <h2 className="text-3xl font-black mb-2 lowercase">{is_login ? "Go sign in" : "Make new account"}</h2>
                   <p className="text-slate-400 text-sm font-medium tracking-tight">
-                  {isLogin ? "Sign in to your account." : "Join RESUDEX."}
+                  {is_login ? "Use your creds." : "Fill the stuff below."}
                   </p>
                 </div>
 
-                <form onSubmit={handleAuth} className="space-y-5">
+                <form onSubmit={do_auth} className="space-y-5">
                   <AnimatePresence>
-                    {!isLogin && (
+                    {!is_login && (
                       <>
-                        <InputField label="Full Name" icon={<User size={18}/>} placeholder="Aadya Pratap" value={fullName} onChange={setFullName} />
-                        <InputField label="Email" icon={<Mail size={18}/>} placeholder="aadya@example.com" value={email} onChange={setEmail} />
+                        <InputField label="Full Name" icon={<User size={18}/>} placeholder="Name here" value={fname} onChange={set_fname} />
+                        <InputField label="Email" icon={<Mail size={18}/>} placeholder="mail@here.com" value={mail} onChange={set_mail} />
                       </>
                     )}
                   </AnimatePresence>
                   
-                  <InputField label="Username" icon={<Zap size={18}/>} placeholder="aadya4517" value={username} onChange={setUsername} />
-                  <InputField label="Password" icon={<Lock size={18}/>} placeholder="••••••••" type="password" value={password} onChange={setPassword} />
+                  <InputField label="Username" icon={<Zap size={18}/>} placeholder="usr4517" value={usr} onChange={set_usr} />
+                  <InputField label="Password" icon={<Lock size={18}/>} placeholder="••••••••" type="password" value={pass} onChange={set_pass} />
 
                   <AnimatePresence>
-                    {error && (
+                    {err_msg && (
                       <motion.div 
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: "auto", opacity: 1 }}
                         className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-2 text-red-500 text-[10px] font-black uppercase tracking-widest"
                       >
-                        <AlertCircle size={14}/> {error}
+                        <AlertCircle size={14}/> {err_msg}
                       </motion.div>
                     )}
                   </AnimatePresence>
 
                   <button 
-                    disabled={loading}
-                    className={`w-full neon-button py-4 mt-4 flex items-center justify-center gap-2 group ${loading ? 'opacity-50 cursor-wait' : ''}`}
+                    disabled={is_busy}
+                    className={`w-full neon-button py-4 mt-4 flex items-center justify-center gap-2 group ${is_busy ? 'opacity-50 cursor-wait' : ''}`}
                   >
-                    {loading ? "Signing in..." : isLogin ? "SIGN IN" : "CREATE ACCOUNT"} 
-                    {!loading && <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />}
+                    {is_busy ? "Busy..." : is_login ? "SIGN IN" : "CREATE"} 
+                    {!is_busy && <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />}
                   </button>
                 </form>
 
                 <div className="mt-10 pt-8 border-t border-white/5 text-center">
                   <p className="text-slate-500 text-xs font-black uppercase tracking-[0.2em]">
-                    {isLogin ? "No account?" : "Already a member?"}
+                    {is_login ? "No account?" : "Already in?"}
                     <button 
-                      onClick={() => setIsLogin(!isLogin)}
+                      onClick={() => set_is_login(!is_login)}
                       className="ml-2 text-[#00F0FF] hover:underline cursor-pointer"
                     >
-                      {isLogin ? "CREATE ACCOUNT" : "SIGN IN"}
+                      {is_login ? "CREATE" : "LOG IN"}
                     </button>
                   </p>
                 </div>
@@ -144,8 +157,6 @@ export default function AuthPage() {
           )}
         </AnimatePresence>
       </div>
-
-
     </div>
   );
 }

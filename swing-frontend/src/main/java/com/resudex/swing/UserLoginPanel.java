@@ -4,22 +4,21 @@ import javax.swing.*;
 import java.awt.*;
 
 /**
- * "welcome back" sign-in + "new account" sign-up with glassmorphic cards.
+ * Handles sign in and sign up with glass look.
  */
 public class UserLoginPanel extends JPanel {
 
-    private final CardLayout cardLayout = new CardLayout();
-    private final JPanel cards = new JPanel(cardLayout);
+    private final CardLayout card_lay = new CardLayout();
+    private final JPanel cards = new JPanel(card_lay);
 
     public UserLoginPanel() {
         setLayout(new BorderLayout());
 
         cards.setOpaque(false);
-        cards.add(createSignInPanel(), "SIGNIN");
-        cards.add(createSignUpPanel(), "SIGNUP");
+        cards.add(get_in_panel(), "SIGNIN");
+        cards.add(join_up_panel(), "SIGNUP");
 
-        // Background panel with gradient + subtle grid
-        JPanel main = new JPanel(new GridBagLayout()) {
+        JPanel bg_box = new JPanel(new GridBagLayout()) {
             @Override
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
@@ -34,31 +33,29 @@ public class UserLoginPanel extends JPanel {
                 g2.dispose();
             }
         };
-        main.add(cards);
-        add(main, BorderLayout.CENTER);
+        bg_box.add(cards);
+        add(bg_box, BorderLayout.CENTER);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    //  Sign In panel  ("welcome back")
-    // ─────────────────────────────────────────────────────────────────────────
-    private JPanel createSignInPanel() {
+    // sign in view
+    private JPanel get_in_panel() {
 
-        JTextField  idField   = glassField(320, 45);
-        JPasswordField passField = glassPassField(320, 45);
-        JLabel msg = msgLabel();
+        JTextField  uid_f   = new_box(320, 45);
+        JPasswordField pwd_f = new_pass_box(320, 45);
+        JLabel msg = get_msg_lbl();
 
-        JButton btn = pillButton("SIGN IN \u2192");
+        JButton btn = go_btn("SIGN IN \u2192");
         btn.addActionListener(e -> {
-            String u    = idField.getText().trim();
-            String pStr = new String(passField.getPassword()).trim();
-            if (u.isEmpty() || pStr.isEmpty()) { msg.setText("Fill all fields."); return; }
+            String u = uid_f.getText().trim();
+            String p = new String(pwd_f.getPassword()).trim();
+            if (u.isEmpty() || p.isEmpty()) { msg.setText("Fill all fields."); return; }
             btn.setText("AUTHORIZING...");
             new Thread(() -> {
-                int uid = ApiClient.login(u, pStr);
+                int uid = ApiClient.do_login(u, p);
                 SwingUtilities.invokeLater(() -> {
                     if (uid != -1) {
-                        ResudexApp.currentUserId = uid;
-                        ResudexApp.showUserDashboard();
+                        ResudexApp.uid = uid;
+                        ResudexApp.go_user_pnl();
                     } else {
                         btn.setText("SIGN IN \u2192");
                         msg.setText("INVALID CREDENTIALS");
@@ -67,56 +64,53 @@ public class UserLoginPanel extends JPanel {
             }).start();
         });
 
-        JButton toSignup = linkButton("NO ACCOUNT?  <font color='#00F0FF'><b>CREATE ACCOUNT</b></font>");
-        toSignup.addActionListener(e -> cardLayout.show(cards, "SIGNUP"));
+        JButton to_up = link_btn("NO ACCOUNT?  <font color='#00F0FF'><b>CREATE ACCOUNT</b></font>");
+        to_up.addActionListener(e -> card_lay.show(cards, "SIGNUP"));
 
-        // Layout
         JPanel p = new JPanel();
         p.setOpaque(false);
         p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
-        p.add(brandingLabel());
+        p.add(see_brand());
         p.add(Box.createRigidArea(new Dimension(0, 35)));
-        p.add(centeredLabel("welcome back", 42, Font.BOLD, Color.WHITE));
+        p.add(make_lbl("welcome back", 42, Font.BOLD, Color.WHITE));
         p.add(Box.createRigidArea(new Dimension(0, 6)));
-        p.add(centeredLabel("Sign in to your account.", 14, Font.PLAIN, new Color(148, 163, 184)));
+        p.add(make_lbl("Sign in to your account.", 14, Font.PLAIN, new Color(148, 163, 184)));
         p.add(Box.createRigidArea(new Dimension(0, 35)));
-        p.add(labeledRow("USERNAME", idField));
+        p.add(put_lbl_row("USERNAME", uid_f));
         p.add(Box.createRigidArea(new Dimension(0, 14)));
-        p.add(labeledRow("PASSWORD", passField));
+        p.add(put_lbl_row("PASSWORD", pwd_f));
         p.add(Box.createRigidArea(new Dimension(0, 10)));
-        p.add(center(msg));
+        p.add(mid_box(msg));
         p.add(Box.createRigidArea(new Dimension(0, 16)));
-        p.add(center(btn));
+        p.add(mid_box(btn));
         p.add(Box.createRigidArea(new Dimension(0, 16)));
-        p.add(center(toSignup));
+        p.add(mid_box(to_up));
 
-        return glassCard(p);
+        return wrap_glass(p);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    //  Sign Up panel  ("new account")
-    // ─────────────────────────────────────────────────────────────────────────
-    private JPanel createSignUpPanel() {
+    // sign up view
+    private JPanel join_up_panel() {
 
-        JTextField  nameField  = glassField(320, 45);
-        JTextField  emailField = glassField(320, 45);
-        JTextField  idField    = glassField(320, 45);
-        JPasswordField passField  = glassPassField(320, 45);
-        JLabel msg = msgLabel();
+        JTextField  name_f  = new_box(320, 45);
+        JTextField  mail_f = new_box(320, 45);
+        JTextField  uid_f    = new_box(320, 45);
+        JPasswordField pwd_f  = new_pass_box(320, 45);
+        JLabel msg = get_msg_lbl();
 
-        JButton btn = pillButton("CREATE ACCOUNT \u2192");
+        JButton btn = go_btn("CREATE ACCOUNT \u2192");
         btn.addActionListener(e -> {
-            String f    = nameField.getText().trim();
-            String em   = emailField.getText().trim();
-            String u    = idField.getText().trim();
-            String pStr = new String(passField.getPassword()).trim();
-            if (f.isEmpty() || em.isEmpty() || u.isEmpty() || pStr.isEmpty()) {
+            String f = name_f.getText().trim();
+            String em = mail_f.getText().trim();
+            String u = uid_f.getText().trim();
+            String p = new String(pwd_f.getPassword()).trim();
+            if (f.isEmpty() || em.isEmpty() || u.isEmpty() || p.isEmpty()) {
                 msg.setText("All fields required.");
                 return;
             }
             btn.setText("Creating...");
             new Thread(() -> {
-                String err = ApiClient.register(u, pStr, f, em);
+                String err = ApiClient.add_usr(u, p, f, em);
                 SwingUtilities.invokeLater(() -> {
                     btn.setText("CREATE ACCOUNT \u2192");
                     if (err == null) {
@@ -130,42 +124,37 @@ public class UserLoginPanel extends JPanel {
             }).start();
         });
 
-        JButton toSignin = linkButton("BACK TO  <font color='#00F0FF'><b>SIGN IN</b></font>");
-        toSignin.addActionListener(e -> cardLayout.show(cards, "SIGNIN"));
+        JButton to_in = link_btn("BACK TO  <font color='#00F0FF'><b>SIGN IN</b></font>");
+        to_in.addActionListener(e -> card_lay.show(cards, "SIGNIN"));
 
         JPanel p = new JPanel();
         p.setOpaque(false);
         p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
-        p.add(brandingLabel());
+        p.add(see_brand());
         p.add(Box.createRigidArea(new Dimension(0, 28)));
-        p.add(centeredLabel("new account", 42, Font.BOLD, Color.WHITE));
+        p.add(make_lbl("new account", 42, Font.BOLD, Color.WHITE));
         p.add(Box.createRigidArea(new Dimension(0, 6)));
-        p.add(centeredLabel("Join RESUDEX.", 14, Font.PLAIN, new Color(148, 163, 184)));
+        p.add(make_lbl("Join RESUDEX.", 14, Font.PLAIN, new Color(148, 163, 184)));
         p.add(Box.createRigidArea(new Dimension(0, 28)));
-        p.add(labeledRow("FULL NAME", nameField));
+        p.add(put_lbl_row("FULL NAME", name_f));
         p.add(Box.createRigidArea(new Dimension(0, 12)));
-        p.add(labeledRow("EMAIL", emailField));
+        p.add(put_lbl_row("EMAIL", mail_f));
         p.add(Box.createRigidArea(new Dimension(0, 12)));
-        p.add(labeledRow("USERNAME", idField));
+        p.add(put_lbl_row("USERNAME", uid_f));
         p.add(Box.createRigidArea(new Dimension(0, 12)));
-        p.add(labeledRow("PASSWORD", passField));
+        p.add(put_lbl_row("PASSWORD", pwd_f));
         p.add(Box.createRigidArea(new Dimension(0, 10)));
-        p.add(center(msg));
+        p.add(mid_box(msg));
         p.add(Box.createRigidArea(new Dimension(0, 14)));
-        p.add(center(btn));
+        p.add(mid_box(btn));
         p.add(Box.createRigidArea(new Dimension(0, 14)));
-        p.add(center(toSignin));
+        p.add(mid_box(to_in));
 
-        return glassCard(p);
+        return wrap_glass(p);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    //  Helpers
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /** Wraps content in translucent glassmorphic card */
-    private JPanel glassCard(JPanel content) {
-        JPanel glass = new JPanel(new BorderLayout()) {
+    private JPanel wrap_glass(JPanel content) {
+        JPanel g_box = new JPanel(new BorderLayout()) {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
@@ -177,33 +166,32 @@ public class UserLoginPanel extends JPanel {
                 g2.dispose();
             }
         };
-        glass.setOpaque(false);
-        glass.setBorder(BorderFactory.createEmptyBorder(40, 45, 40, 45));
-        glass.add(content, BorderLayout.CENTER);
-        return glass;
+        g_box.setOpaque(false);
+        g_box.setBorder(BorderFactory.createEmptyBorder(40, 45, 40, 45));
+        g_box.add(content, BorderLayout.CENTER);
+        return g_box;
     }
 
-    /** A labeled field row:  CYAN LABEL above the field */
-    private JPanel labeledRow(String labelText, JComponent field) {
-        JPanel row = new JPanel();
-        row.setOpaque(false);
-        row.setLayout(new BoxLayout(row, BoxLayout.Y_AXIS));
-        row.setAlignmentX(Component.CENTER_ALIGNMENT);
+    private JPanel put_lbl_row(String txt, JComponent field) {
+        JPanel r = new JPanel();
+        r.setOpaque(false);
+        r.setLayout(new BoxLayout(r, BoxLayout.Y_AXIS));
+        r.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        JLabel lbl = new JLabel(labelText);
-        lbl.setFont(new Font("SansSerif", Font.BOLD, 10));
-        lbl.setForeground(new Color(0, 240, 255, 180));
-        lbl.setAlignmentX(Component.CENTER_ALIGNMENT);
+        JLabel l = new JLabel(txt);
+        l.setFont(new Font("SansSerif", Font.BOLD, 10));
+        l.setForeground(new Color(0, 240, 255, 180));
+        l.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         field.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        row.add(lbl);
-        row.add(Box.createRigidArea(new Dimension(0, 5)));
-        row.add(field);
-        return row;
+        r.add(l);
+        r.add(Box.createRigidArea(new Dimension(0, 5)));
+        r.add(field);
+        return r;
     }
 
-    private JTextField glassField(int w, int h) {
+    private JTextField new_box(int w, int h) {
         JTextField f = new JTextField();
         f.setMaximumSize(new Dimension(w, h));
         f.setPreferredSize(new Dimension(w, h));
@@ -218,7 +206,7 @@ public class UserLoginPanel extends JPanel {
         return f;
     }
 
-    private JPasswordField glassPassField(int w, int h) {
+    private JPasswordField new_pass_box(int w, int h) {
         JPasswordField f = new JPasswordField();
         f.setMaximumSize(new Dimension(w, h));
         f.setPreferredSize(new Dimension(w, h));
@@ -233,8 +221,8 @@ public class UserLoginPanel extends JPanel {
         return f;
     }
 
-    private JButton pillButton(String text) {
-        JButton b = new JButton(text) {
+    private JButton go_btn(String txt) {
+        JButton b = new JButton(txt) {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
@@ -257,7 +245,7 @@ public class UserLoginPanel extends JPanel {
         return b;
     }
 
-    private JButton linkButton(String html) {
+    private JButton link_btn(String html) {
         JButton b = new JButton("<html>" + html + "</html>");
         b.setContentAreaFilled(false);
         b.setBorderPainted(false);
@@ -269,7 +257,7 @@ public class UserLoginPanel extends JPanel {
         return b;
     }
 
-    private JLabel msgLabel() {
+    private JLabel get_msg_lbl() {
         JLabel l = new JLabel(" ", SwingConstants.CENTER);
         l.setFont(new Font("SansSerif", Font.PLAIN, 12));
         l.setForeground(new Color(255, 70, 70));
@@ -277,15 +265,15 @@ public class UserLoginPanel extends JPanel {
         return l;
     }
 
-    private JLabel centeredLabel(String text, int size, int style, Color color) {
-        JLabel l = new JLabel(text, SwingConstants.CENTER);
+    private JLabel make_lbl(String txt, int size, int style, Color c) {
+        JLabel l = new JLabel(txt, SwingConstants.CENTER);
         l.setFont(new Font("SansSerif", style, size));
-        l.setForeground(color);
+        l.setForeground(c);
         l.setAlignmentX(Component.CENTER_ALIGNMENT);
         return l;
     }
 
-    private JLabel brandingLabel() {
+    private JLabel see_brand() {
         JLabel l = new JLabel("<html><font color='#00F0FF'>&#x26A1;</font> RESUDEX</html>", SwingConstants.CENTER);
         l.setFont(new Font("SansSerif", Font.BOLD, 18));
         l.setForeground(Color.WHITE);
@@ -293,13 +281,11 @@ public class UserLoginPanel extends JPanel {
         return l;
     }
 
-    /** Centers a component in a transparent row */
-    private JPanel center(JComponent c) {
+    private JPanel mid_box(JComponent c) {
         JPanel p = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
         p.setOpaque(false);
         p.add(c);
         p.setAlignmentX(Component.CENTER_ALIGNMENT);
         return p;
     }
-
-    }
+}

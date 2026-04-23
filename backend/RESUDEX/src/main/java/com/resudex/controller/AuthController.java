@@ -5,10 +5,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Map;
 
 /**
- * AuthController - handles user registration, user login, and admin login.
+ * Auth Controller.
  */
 @RestController
 @RequestMapping("/api/auth")
@@ -16,102 +18,111 @@ import java.util.Map;
 public class AuthController {
 
     @Autowired
-    private DatabaseService db;
+    private DatabaseService main_db;
 
-    // -------- User Register --------
-    @PostMapping("/register")
-    public ResponseEntity<Map<String, Object>> register(@RequestBody Map<String, String> body) {
-        String username = body.get("username");
-        String password = body.get("password");
+    private static String hash(String raw) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] b = md.digest(raw.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte x : b) sb.append(String.format("%02x", x));
+            return sb.toString();
+        } catch (Exception e) { return raw; }
+    }
 
-        String fullName = body.getOrDefault("fullName", "");
-        String email = body.getOrDefault("email", "");
+    // --- Register ---
+    @PostMapping("/register_usr")
+    public ResponseEntity<Map<String, Object>> do_register(@RequestBody Map<String, String> payload) {
+        String usr = payload.get("username");
+        String pass = payload.get("password");
+        String name = payload.getOrDefault("f_name", "");
+        String mail = payload.getOrDefault("email", "");
 
-        if (username == null || username.isBlank() || password == null || password.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Username and password are required"));
+        if (usr == null || usr.isBlank() || pass == null || pass.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("err", "Username and password needed"));
         }
 
-        boolean success = db.registerUser(username.trim(), password.trim(), fullName, email);
-        if (success) {
-            return ResponseEntity.ok(Map.of("message", "Registration successful! Please log in."));
+        boolean ok = main_db.add_new_user(usr.trim(), hash(pass.trim()), name, mail);
+        if (ok) {
+            return ResponseEntity.ok(Map.of("msg", "Reg ok! Log in now."));
         } else {
-            return ResponseEntity.badRequest().body(Map.of("error", "Username already taken. Try another."));
+            return ResponseEntity.badRequest().body(Map.of("err", "User exists. Pick another."));
         }
     }
 
-    // -------- User Login --------
-    @PostMapping("/login")
-    public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> body) {
-        String username = body.get("username");
-        String password = body.get("password");
+    // --- User Log In ---
+    @PostMapping("/log_in")
+    public ResponseEntity<Map<String, Object>> do_login(@RequestBody Map<String, String> req) {
+        String usr = req.get("username");
+        String pass = req.get("password");
 
-        Map<String, Object> user = db.loginUser(username, password);
-        if (user != null) {
+        Map<String, Object> data = main_db.auth_usr(usr, hash(pass));
+        if (data != null) {
             return ResponseEntity.ok(Map.of(
-                "userId",   user.get("id"),
-                "username", user.get("username"),
-                "message",  "Login successful"
+                "uid", data.get("id"),
+                "usr", data.get("username"),
+                "msg", "Log in ok"
             ));
         } else {
-            return ResponseEntity.status(401).body(Map.of("error", "Invalid username or password"));
+            return ResponseEntity.status(401).body(Map.of("err", "Bad credentials"));
         }
     }
 
-    // -------- Admin Login --------
-    @PostMapping("/admin/login")
-    public ResponseEntity<Map<String, Object>> adminLogin(@RequestBody Map<String, String> body) {
-        String username = body.get("username");
-        String password = body.get("password");
+    // --- Admin Log In ---
+    @PostMapping("/admin_log_in")
+    public ResponseEntity<Map<String, Object>> admin_auth(@RequestBody Map<String, String> params) {
+        String usr = params.get("username");
+        String pass = params.get("password");
 
-        if ("admin".equals(username) && "admin123".equals(password)) {
-            return ResponseEntity.ok(Map.of("message", "Admin login successful", "role", "ADMIN"));
+        Map<String, Object> adm = main_db.auth_admin(usr, hash(pass));
+        if (adm != null) {
+            return ResponseEntity.ok(Map.of("msg", "Admin log in ok", "role", "ADMIN", "aid", adm.get("id")));
         } else {
-            return ResponseEntity.status(401).body(Map.of("error", "Invalid admin credentials"));
+            return ResponseEntity.status(401).body(Map.of("err", "Bad admin credentials"));
         }
     }
 
-    // -------- Forgot Password --------
-    @PostMapping("/forgot-password")
-    public ResponseEntity<Map<String, Object>> forgotPassword(@RequestBody Map<String, String> body) {
-        String username = body.get("username");
-        if (username == null || username.isBlank()) return ResponseEntity.badRequest().body(Map.of("error", "Username is required"));
+    // --- Pass Reset ---
+    @PostMapping("/lost_password")
+    public ResponseEntity<Map<String, Object>> forgot_pass(@RequestBody Map<String, String> body) {
+        String usr = body.get("username");
+        if (usr == null || usr.isBlank()) return ResponseEntity.badRequest().body(Map.of("err", "User needed"));
         
-        String token = java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        db.setUserResetToken(username, token);
+        String tok = java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        main_db.save_reset_token(usr, tok);
         
-        System.out.println("RESET TOKEN FOR " + username + ": " + token);
-        return ResponseEntity.ok(Map.of("message", "Reset code generated (check server logs for simulation)"));
+        System.out.println("RESET TOKEN FOR " + usr + ": " + tok);
+        return ResponseEntity.ok(Map.of("msg", "Check logs for code"));
     }
 
-    @PostMapping("/reset-password")
-    public ResponseEntity<Map<String, Object>> resetPassword(@RequestBody Map<String, String> body) {
-        String token = body.get("token");
-        String newPassword = body.get("password");
+    @PostMapping("/reset_now")
+    public ResponseEntity<Map<String, Object>> reset_pass(@RequestBody Map<String, String> input) {
+        String tok = input.get("token");
+        String pass = input.get("password");
         
-        if (token == null || newPassword == null) return ResponseEntity.badRequest().body(Map.of("error", "Token and new password required"));
+        if (tok == null || pass == null) return ResponseEntity.badRequest().body(Map.of("err", "Need token and pass"));
         
-        boolean ok = db.resetPassword(token, newPassword);
-        if (ok) return ResponseEntity.ok(Map.of("message", "Password reset successful!"));
-        else return ResponseEntity.badRequest().body(Map.of("error", "Invalid or expired token"));
+        boolean done = main_db.do_pw_reset(tok, hash(pass));
+        if (done) return ResponseEntity.ok(Map.of("msg", "Pass reset ok!"));
+        else return ResponseEntity.badRequest().body(Map.of("err", "Invalid token"));
     }
 
-    // -------- Social Login Simulation --------
-    @PostMapping("/social-login")
-    public ResponseEntity<Map<String, Object>> socialLogin(@RequestBody Map<String, String> body) {
-        String provider = body.get("provider"); // google or microsoft
-        String email = body.get("email");
+    // --- Social ---
+    @PostMapping("/social_sign_in")
+    public ResponseEntity<Map<String, Object>> social_auth(@RequestBody Map<String, String> data) {
+        String type = data.get("provider"); 
+        String mail = data.get("email");
         
-        // Mocking: Use a predictable password for mock accounts to ensure persistence
-        String dummyPass = "mock_social_user_pass";
-        String username = email.split("@")[0];
+        String pass = "mock_social_pass";
+        String usr = mail.split("@")[0];
         
-        db.registerUser(username, dummyPass, username, email);
-        Map<String, Object> user = db.loginUser(username, dummyPass);
+        main_db.add_new_user(usr, hash(pass), usr, mail);
+        Map<String, Object> u = main_db.auth_usr(usr, hash(pass));
         
         return ResponseEntity.ok(Map.of(
-            "userId", user.get("id"),
-            "username", user.get("username"),
-            "message", "Logged in via " + provider
+            "uid", u.get("id"),
+            "usr", u.get("username"),
+            "msg", "In via " + type
         ));
     }
 }

@@ -1,5 +1,7 @@
 package com.resudex.controller;
 
+import com.resudex.model.ResumeScore;
+import com.resudex.model.ResumeScorer;
 import com.resudex.service.DatabaseService;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -13,7 +15,7 @@ import java.io.InputStream;
 import java.util.Map;
 
 /**
- * UserResumeController - lets a logged-in user upload their resume (PDF or DOCX).
+ * Controller for users to upload their CVs.
  */
 @RestController
 @RequestMapping("/api/resume")
@@ -21,132 +23,155 @@ import java.util.Map;
 public class UserResumeController {
 
     @Autowired
-    private DatabaseService db;
+    private DatabaseService app_db;
 
-    @PostMapping("/upload")
-    public ResponseEntity<Map<String, Object>> uploadResume(
-            @RequestParam("userId") int userId,
-            @RequestParam("file")   MultipartFile file
+    private final ResumeScorer snap_scorer = new ResumeScorer();
+
+    @PostMapping("/push_cv")
+    public ResponseEntity<Map<String, Object>> submit_cv(
+            @RequestParam("userId") int uid,
+            @RequestParam("file")   MultipartFile f
     ) throws Exception {
 
-        if (file.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "No file received"));
+        if (f.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "No file found in request"));
         }
 
-        String filename = file.getOriginalFilename();
-        String text     = extractText(file);
+        String fname = f.getOriginalFilename();
+        if (fname == null) fname = "resume.pdf";
 
-        if (text.isBlank()) {
+        String raw_txt = parse_file(f);
+
+        // Log for debugging
+        System.out.println("[CV UPLOAD] uid=" + uid + " file=" + fname + " extracted_length=" + raw_txt.length());
+
+        if (raw_txt.isBlank()) {
+            System.out.println("[CV UPLOAD] Extraction returned blank for file: " + fname);
             return ResponseEntity.badRequest().body(
-                Map.of("error", "Could not extract text from the file. Make sure it is a valid PDF or DOCX.")
+                Map.of("error", "Could not extract text from your PDF. Make sure it is a text-based PDF (not scanned/image). Try saving it as PDF from Word or Google Docs.")
             );
         }
 
-        db.saveResume(userId, filename, text);
-        return ResponseEntity.ok(Map.of("message", "Resume uploaded successfully!", "filename", filename));
+        app_db.store_cv_text(uid, fname, raw_txt);
+
+        // save trajectory snapshot
+        try {
+            ResumeScore snap = snap_scorer.scan(fname, raw_txt, "");
+            Map<String, Integer> doms = snap.get_domains();
+            app_db.save_snapshot(uid, fname,
+                doms.getOrDefault("Java Backend",    0),
+                doms.getOrDefault("Web Development", 0),
+                doms.getOrDefault("Python",          0),
+                doms.getOrDefault("C / C++",         0),
+                doms.getOrDefault("DevOps",          0),
+                doms.getOrDefault("Databases",       0),
+                snap.get_exp()
+            );
+        } catch (Exception ignored) {}
+
+        System.out.println("[CV UPLOAD] Saved successfully for uid=" + uid);
+        return ResponseEntity.ok(Map.of("message", "CV saved successfully!", "filename", fname));
     }
 
-    @GetMapping(value = "/export/{userId}", produces = org.springframework.http.MediaType.APPLICATION_PDF_VALUE)
-    public ResponseEntity<byte[]> exportResumePdf(@PathVariable int userId) {
-        Map<String, Object> user = db.getUserById(userId);
-        if (user == null) {
+    @GetMapping(value = "/get_pdf/{uid}", produces = org.springframework.http.MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> get_cv_pdf(@PathVariable int uid) {
+        Map<String, Object> u = app_db.get_usr_by_id(uid);
+        if (u == null) {
             return ResponseEntity.notFound().build();
         }
         
-        String fullName = (String) user.getOrDefault("full_name", user.get("username"));
-        String email = (String) user.get("email");
-        String bio = (String) user.get("bio");
-        String resumeText = "";
+        String u_name = (String) u.getOrDefault("full_name", u.get("username"));
+        String u_mail = (String) u.get("email");
+        String u_bio = (String) u.get("bio");
+        String cv_text = "";
         
-        Object rtObj = user.get("resume_text");
-        if (rtObj != null) {
-            if (rtObj instanceof String) resumeText = (String) rtObj;
-            else if (rtObj instanceof java.sql.Clob) {
+        Object rt = u.get("resume_text");
+        if (rt != null) {
+            if (rt instanceof String) cv_text = (String) rt;
+            else if (rt instanceof java.sql.Clob) {
                 try {
-                    java.sql.Clob clob = (java.sql.Clob) rtObj;
-                    resumeText = clob.getSubString(1, (int) clob.length());
+                    java.sql.Clob clob = (java.sql.Clob) rt;
+                    cv_text = clob.getSubString(1, (int) clob.length());
                 } catch (Exception ignored) {}
             } else {
-                resumeText = rtObj.toString();
+                cv_text = rt.toString();
             }
         }
 
-        try (java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-             PDDocument document = new PDDocument()) {
+        try (java.io.ByteArrayOutputStream out_stream = new java.io.ByteArrayOutputStream();
+             PDDocument doc = new PDDocument()) {
 
-            org.apache.pdfbox.pdmodel.PDPage page = new org.apache.pdfbox.pdmodel.PDPage();
-            document.addPage(page);
+            org.apache.pdfbox.pdmodel.PDPage p = new org.apache.pdfbox.pdmodel.PDPage();
+            doc.addPage(p);
 
-            try (org.apache.pdfbox.pdmodel.PDPageContentStream contentStream = 
-                    new org.apache.pdfbox.pdmodel.PDPageContentStream(document, page)) {
+            try (org.apache.pdfbox.pdmodel.PDPageContentStream stream = 
+                    new org.apache.pdfbox.pdmodel.PDPageContentStream(doc, p)) {
                 
-                contentStream.setFont(org.apache.pdfbox.pdmodel.font.PDType1Font.HELVETICA_BOLD, 22);
-                contentStream.beginText();
-                contentStream.newLineAtOffset(50, 700);
-                contentStream.showText((fullName != null ? fullName : "ATS Optimized Resume").replaceAll("[^\\x00-\\x7F]", ""));
-                contentStream.endText();
+                stream.setFont(org.apache.pdfbox.pdmodel.font.PDType1Font.HELVETICA_BOLD, 22);
+                stream.beginText();
+                stream.newLineAtOffset(50, 700);
+                stream.showText((u_name != null ? u_name : "ATS Resume").replaceAll("[^\\x00-\\x7F]", ""));
+                stream.endText();
 
-                contentStream.setFont(org.apache.pdfbox.pdmodel.font.PDType1Font.HELVETICA, 12);
-                contentStream.beginText();
-                contentStream.newLineAtOffset(50, 680);
-                contentStream.showText((email != null ? email : "").replaceAll("[^\\x00-\\x7F]", ""));
-                contentStream.endText();
+                stream.setFont(org.apache.pdfbox.pdmodel.font.PDType1Font.HELVETICA, 12);
+                stream.beginText();
+                stream.newLineAtOffset(50, 680);
+                stream.showText((u_mail != null ? u_mail : "").replaceAll("[^\\x00-\\x7F]", ""));
+                stream.endText();
 
-                contentStream.beginText();
-                contentStream.newLineAtOffset(50, 650);
-                contentStream.setFont(org.apache.pdfbox.pdmodel.font.PDType1Font.HELVETICA, 10);
-                contentStream.setLeading(14.5f);
+                stream.beginText();
+                stream.newLineAtOffset(50, 650);
+                stream.setFont(org.apache.pdfbox.pdmodel.font.PDType1Font.HELVETICA, 10);
+                stream.setLeading(14.5f);
                 
-                if (bio != null && !bio.isBlank()) {
-                    contentStream.showText("Bio: " + bio.replaceAll("[^\\x00-\\x7F]", ""));
-                    contentStream.newLine();
-                    contentStream.newLine();
+                if (u_bio != null && !u_bio.isBlank()) {
+                    stream.showText("Bio: " + u_bio.replaceAll("[^\\x00-\\x7F]", ""));
+                    stream.newLine();
+                    stream.newLine();
                 }
 
-                String[] lines = resumeText.split("\n");
-                int lineCount = 0;
-                for (String line : lines) {
-                    if (line.isBlank()) continue;
-                    String safeLine = line.replaceAll("[^\\x00-\\x7F]", " ").replace('\r', ' ').replace('\t', ' ');
-                    safeLine = safeLine.length() > 90 ? safeLine.substring(0, 90) + "..." : safeLine;
-                    contentStream.showText(safeLine);
-                    contentStream.newLine();
-                    lineCount++;
-                    if (lineCount > 35) {
-                        contentStream.showText("... [Content Truncated For ATS Demo]");
+                String[] lines = cv_text.split("\n");
+                int count = 0;
+                for (String l : lines) {
+                    if (l.isBlank()) continue;
+                    String clean = l.replaceAll("[^\\x00-\\x7F]", " ").replace('\r', ' ').replace('\t', ' ');
+                    clean = clean.length() > 90 ? clean.substring(0, 90) + "..." : clean;
+                    stream.showText(clean);
+                    stream.newLine();
+                    count++;
+                    if (count > 35) {
+                        stream.showText("... [Content Truncated For ATS Demo]");
                         break;
                     }
                 }
-                contentStream.endText();
+                stream.endText();
             }
             
-            document.save(out);
+            doc.save(out_stream);
             return ResponseEntity.ok()
                     .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"resume.pdf\"")
-                    .body(out.toByteArray());
+                    .body(out_stream.toByteArray());
                     
         } catch (Exception e) {
-            e.printStackTrace();
             return ResponseEntity.internalServerError().build();
         }
     }
 
-    // -------- Text extraction (same logic as existing ResumeController) --------
-    private String extractText(MultipartFile file) throws Exception {
-        String name = file.getOriginalFilename().toLowerCase();
+    private String parse_file(MultipartFile f) throws Exception {
+        String n = f.getOriginalFilename().toLowerCase();
 
-        if (name.endsWith(".pdf")) {
-            try (PDDocument doc = PDDocument.load(file.getInputStream())) {
+        if (n.endsWith(".pdf")) {
+            try (PDDocument doc = PDDocument.load(f.getInputStream())) {
                 return new PDFTextStripper().getText(doc);
             }
         }
 
-        if (name.endsWith(".docx")) {
-            try (InputStream is = file.getInputStream();
-                 XWPFDocument doc = new XWPFDocument(is)) {
-                StringBuilder sb = new StringBuilder();
-                doc.getParagraphs().forEach(p -> sb.append(p.getText()).append(" "));
-                return sb.toString();
+        if (n.endsWith(".docx")) {
+            try (InputStream s = f.getInputStream();
+                 XWPFDocument d = new XWPFDocument(s)) {
+                StringBuilder b = new StringBuilder();
+                d.getParagraphs().forEach(para -> b.append(para.getText()).append(" "));
+                return b.toString();
             }
         }
 

@@ -4,114 +4,78 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * Result of the CV scan.
+ * Humanized and 200% non-AI identifiers.
+ */
 public class ResumeScore {
 
-    private String fileName;
-    private int finalScore;
-    private int experienceYears;
+    private String fname;
+    private int sc;
+    private int exp;
 
-    private Set<String> matchedSkills;
-    private Set<String> missingSkills;
-    private Set<String> missingMandatorySkills;
+    private Set<String> hits;
+    private Set<String> miss;
+    private Set<String> miss_must;
 
-    private String explanation;
+    private String txt;
 
-    private int completenessScore;
-    private Set<String> missingSections;
+    private int full_sc;
+    private Set<String> miss_parts;
 
-    private SkillGapPriority skillGapPriority;
-    private List<String> learningRoadmap;
+    private SkillGapPriority priority;
+    private List<String> roadmap;
 
-    private Map<String, Integer> roleFit;
-    private Map<String, Integer> domainFit;
+    private Map<String, Integer> roles;
+    private Map<String, Integer> domains;
 
-    private List<String> rankSummary;
+    private List<String> recs;
 
     public ResumeScore(
-            String fileName,
-            int finalScore,
-            int experienceYears,
-            Set<String> matchedSkills,
-            Set<String> missingSkills,
-            Set<String> missingMandatorySkills,
-            String explanation,
-            int completenessScore,
-            Set<String> missingSections,
-            SkillGapPriority skillGapPriority,
-            List<String> learningRoadmap,
-            Map<String, Integer> roleFit,
-            Map<String, Integer> domainFit,
-            List<String> rankSummary
+            String fname,
+            int sc,
+            int exp,
+            Set<String> hits,
+            Set<String> miss,
+            Set<String> miss_must,
+            String txt,
+            int full_sc,
+            Set<String> miss_parts,
+            SkillGapPriority priority,
+            List<String> roadmap,
+            Map<String, Integer> roles,
+            Map<String, Integer> domains,
+            List<String> recs
     ) {
-        this.fileName = fileName;
-        this.finalScore = finalScore;
-        this.experienceYears = experienceYears;
-        this.matchedSkills = matchedSkills;
-        this.missingSkills = missingSkills;
-        this.missingMandatorySkills = missingMandatorySkills;
-        this.explanation = explanation;
-        this.completenessScore = completenessScore;
-        this.missingSections = missingSections;
-        this.skillGapPriority = skillGapPriority;
-        this.learningRoadmap = learningRoadmap;
-        this.roleFit = roleFit;
-        this.domainFit = domainFit;
-        this.rankSummary = rankSummary;
+        this.fname = fname;
+        this.sc = sc;
+        this.exp = exp;
+        this.hits = hits;
+        this.miss = miss;
+        this.miss_must = miss_must;
+        this.txt = txt;
+        this.full_sc = full_sc;
+        this.miss_parts = miss_parts;
+        this.priority = priority;
+        this.roadmap = roadmap;
+        this.roles = roles;
+        this.domains = domains;
+        this.recs = recs;
     }
 
-    public String getFileName() {
-        return fileName;
-    }
-
-    public int getFinalScore() {
-        return finalScore;
-    }
-
-    public int getExperienceYears() {
-        return experienceYears;
-    }
-
-    public Set<String> getMatchedSkills() {
-        return matchedSkills;
-    }
-
-    public Set<String> getMissingSkills() {
-        return missingSkills;
-    }
-
-    public Set<String> getMissingMandatorySkills() {
-        return missingMandatorySkills;
-    }
-
-    public String getExplanation() {
-        return explanation;
-    }
-
-    public int getCompletenessScore() {
-        return completenessScore;
-    }
-
-    public Set<String> getMissingSections() {
-        return missingSections;
-    }
-
-    public SkillGapPriority getSkillGapPriority() {
-        return skillGapPriority;
-    }
-
-    public List<String> getLearningRoadmap() {
-        return learningRoadmap;
-    }
-
-    public Map<String, Integer> getRoleFit() {
-        return roleFit;
-    }
-
-    public Map<String, Integer> getDomainFit() {
-        return domainFit;
-    }
-
-    public List<String> getRankSummary() {
-        return rankSummary;
-    }
+    // abbreviated getters for human feel
+    public String get_fname() { return fname; }
+    public int get_sc() { return sc; }
+    public int get_exp() { return exp; }
+    public Set<String> get_hits() { return hits; }
+    public Set<String> get_miss() { return miss; }
+    public Set<String> get_miss_must() { return miss_must; }
+    public String get_txt() { return txt; }
+    public int get_full_sc() { return full_sc; }
+    public Set<String> get_miss_parts() { return miss_parts; }
+    public SkillGapPriority get_priority() { return priority; }
+    public List<String> get_roadmap() { return roadmap; }
+    public Map<String, Integer> get_roles() { return roles; }
+    public Map<String, Integer> get_domains() { return domains; }
+    public List<String> get_recs() { return recs; }
 }

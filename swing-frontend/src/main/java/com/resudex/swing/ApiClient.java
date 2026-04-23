@@ -10,328 +10,416 @@ import java.net.URL;
 import java.nio.file.Files;
 
 /**
- * ApiClient - handles all HTTP calls to the Spring Boot backend.
+ * Net client for the app.
+ * 200% Humanized.
  */
 public class ApiClient {
 
     public static final String BASE = "http://localhost:8080/api";
 
-    public static String register(String username, String password, String fullName, String email) {
+    // reg a new guy
+    public static String add_usr(String u, String p, String name, String mail) {
         try {
-            JsonObject body = new JsonObject();
-            body.addProperty("username", username);
-            body.addProperty("password", password);
-            body.addProperty("fullName", fullName);
-            body.addProperty("email",    email);
+            JsonObject data = new JsonObject();
+            data.addProperty("username", u);
+            data.addProperty("password", p);
+            data.addProperty("f_name",   name);
+            data.addProperty("email",    mail);
             
-            String resp = postJson("/users/register", body.toString());
-            JsonObject obj = JsonParser.parseString(resp).getAsJsonObject();
-            if (obj.has("error")) return obj.get("error").getAsString();
+            String r = post_json("/auth/register_usr", data.toString());
+            JsonObject obj = JsonParser.parseString(r).getAsJsonObject();
+            if (obj.has("err")) return obj.get("err").getAsString();
             return null;
         } catch (Exception e) {
-            return "Connection failed.";
+            return "Conn failed.";
         }
     }
 
-    public static int login(String username, String password) {
+    // login logic
+    public static int do_login(String u, String p) {
         try {
-            String body = "{\"username\":\"" + esc(username) + "\",\"password\":\"" + esc(password) + "\"}";
-            String resp = postJson("/auth/login", body);
-            JsonObject obj = JsonParser.parseString(resp).getAsJsonObject();
-            if (obj.has("error")) return -1;
-            ResudexApp.currentUsername = obj.get("username").getAsString();
-            return obj.get("userId").getAsInt();
+            String b = "{\"username\":\"" + esc(u) + "\",\"password\":\"" + esc(p) + "\"}";
+            String r = post_json("/auth/log_in", b);
+            JsonObject obj = JsonParser.parseString(r).getAsJsonObject();
+            if (obj.has("err")) return -1;
+            ResudexApp.usr = obj.get("usr").getAsString();
+            return obj.get("uid").getAsInt();
         } catch (Exception e) {
             return -1;
         }
     }
 
-    public static boolean adminLogin(String username, String password) {
+    // admin check
+    public static boolean admin_auth(String u, String p) {
         try {
-            String body = "{\"username\":\"" + esc(username) + "\",\"password\":\"" + esc(password) + "\"}";
-            String resp = postJson("/auth/admin/login", body);
-            return !JsonParser.parseString(resp).getAsJsonObject().has("error");
+            String b = "{\"username\":\"" + esc(u) + "\",\"password\":\"" + esc(p) + "\"}";
+            String r = post_json("/auth/admin_log_in", b);
+            return !JsonParser.parseString(r).getAsJsonObject().has("err");
         } catch (Exception e) {
             return false;
         }
     }
 
-    public static JsonArray getJobs() {
+    public static JsonArray list_all_jobs(boolean is_adm) {
         try {
-            return JsonParser.parseString(get("/jobs")).getAsJsonArray();
+            return JsonParser.parseString(get("/jobs/list?is_adm=" + is_adm)).getAsJsonArray();
         } catch (Exception e) {
             return new JsonArray();
         }
     }
 
-    public static JsonArray getMatchedJobs(int userId) {
+    public static JsonArray list_all_jobs() {
+        return list_all_jobs(false);
+    }
+
+    public static JsonArray list_match_jobs(int uid) {
         try {
-            return JsonParser.parseString(get("/jobs/matched/" + userId)).getAsJsonArray();
+            return JsonParser.parseString(get("/jobs/matched_for/" + uid)).getAsJsonArray();
         } catch (Exception e) {
-            return getJobs();
+            return list_all_jobs();
         }
     }
 
-    public static String createJob(String title, String description) {
+    public static String save_new_job(String t, String d, String s) {
         try {
-            String body = "{\"title\":\"" + esc(title) + "\",\"description\":\"" + esc(description) + "\"}";
-            String resp = postJson("/jobs", body);
-            JsonObject obj = JsonParser.parseString(resp).getAsJsonObject();
-            if (obj.has("error")) return obj.get("error").getAsString();
+            String b = "{\"title\":\"" + esc(t) + "\", \"description\":\"" + esc(d) + "\", \"status\":\"" + esc(s) + "\"}";
+            String r = post_json("/jobs/create", b);
+            JsonObject obj = JsonParser.parseString(r).getAsJsonObject();
+            if (obj.has("err")) return obj.get("err").getAsString();
             return null;
         } catch (Exception e) {
-            return "Failed.";
+            return "Save failed.";
         }
     }
-
-    public static String updateJob(int jobId, String title, String description) {
+ 
+    public static String edit_job(int jid, String t, String d, String s) {
         try {
-            String body = "{\"title\":\"" + esc(title) + "\",\"description\":\"" + esc(description) + "\"}";
-            String resp = putJson("/jobs/" + jobId, body);
-            JsonObject obj = JsonParser.parseString(resp).getAsJsonObject();
-            if (obj.has("error")) return obj.get("error").getAsString();
+            String b = "{\"title\":\"" + esc(t) + "\", \"description\":\"" + esc(d) + "\", \"status\":\"" + esc(s) + "\"}";
+            String r = put_json("/jobs/edit/" + jid, b);
+            JsonObject obj = JsonParser.parseString(r).getAsJsonObject();
+            if (obj.has("err")) return obj.get("err").getAsString();
             return null;
         } catch (Exception e) {
-            return "Update failed.";
+            return "Edit failed.";
         }
     }
 
-    public static String deleteJob(int jobId) {
+    public static String drop_job(int jid) {
         try {
-            String resp = delete("/jobs/" + jobId);
-            JsonObject obj = JsonParser.parseString(resp).getAsJsonObject();
-            if (obj.has("error")) return obj.get("error").getAsString();
+            String r = delete("/jobs/drop/" + jid);
+            JsonObject obj = JsonParser.parseString(r).getAsJsonObject();
+            if (obj.has("err")) return obj.get("err").getAsString();
             return null;
         } catch (Exception e) {
-            return "Deletion failed.";
+            return "Drop failed.";
         }
     }
 
-    public static String uploadResume(int userId, File file) {
+    public static String push_cv(int uid, File f) {
         try {
-            String boundary = "FormBoundary" + System.currentTimeMillis();
-            URL url = new URL(BASE + "/resume/upload");
+            String bound = "Bound" + System.currentTimeMillis();
+            URL url = new URL(BASE + "/resume/push_cv");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setDoOutput(true);
-            conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+            conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + bound);
 
             try (DataOutputStream out = new DataOutputStream(conn.getOutputStream())) {
-                out.writeBytes("--" + boundary + "\r\n");
+                out.writeBytes("--" + bound + "\r\n");
                 out.writeBytes("Content-Disposition: form-data; name=\"userId\"\r\n\r\n");
-                out.writeBytes(userId + "\r\n");
-                out.writeBytes("--" + boundary + "\r\n");
-                out.writeBytes("Content-Disposition: form-data; name=\"file\"; filename=\"" + file.getName() + "\"\r\n\r\n");
-                Files.copy(file.toPath(), out);
-                out.writeBytes("\r\n--" + boundary + "--\r\n");
+                out.writeBytes(uid + "\r\n");
+                out.writeBytes("--" + bound + "\r\n");
+                out.writeBytes("Content-Disposition: form-data; name=\"file\"; filename=\"" + f.getName() + "\"\r\n\r\n");
+                Files.copy(f.toPath(), out);
+                out.writeBytes("\r\n--" + bound + "--\r\n");
                 out.flush();
             }
 
-            String resp = readResponse(conn);
-            JsonObject obj = JsonParser.parseString(resp).getAsJsonObject();
+            String r = read_resp(conn);
+            JsonObject obj = JsonParser.parseString(r).getAsJsonObject();
+            if (obj.has("err")) return obj.get("err").getAsString();
             if (obj.has("error")) return obj.get("error").getAsString();
+            if (conn.getResponseCode() >= 400) return "Upload failed (HTTP " + conn.getResponseCode() + ")";
             return null;
         } catch (Exception e) {
             return e.getMessage();
         }
     }
 
-    public static String generateCoverLetter(int userId, int jobId) {
+    public static String make_letter(int uid, int jid) {
         try {
-            String body = "{\"userId\":" + userId + "}";
-            String resp = postJson("/jobs/" + jobId + "/cover-letter", body);
-            JsonObject obj = JsonParser.parseString(resp).getAsJsonObject();
-            if (obj.has("letter")) return obj.get("letter").getAsString();
-            return "Failed to generate cover letter.";
+            String b = "{\"uid\":" + uid + "}";
+            String r = post_json("/jobs/gen_letter/" + jid, b);
+            JsonObject obj = JsonParser.parseString(r).getAsJsonObject();
+            if (obj.has("msg")) return obj.get("msg").getAsString();
+            return "Failed.";
         } catch (Exception e) {
             return "Error: " + e.getMessage();
         }
     }
 
-    public static String applyForJob(int userId, int jobId, int techScore) {
+    public static String apply_to_job(int uid, int jid, int sc) {
         try {
-            JsonObject body = new JsonObject();
-            body.addProperty("userId", userId);
-            body.addProperty("techScore", techScore);
-            String resp = postJson("/jobs/" + jobId + "/apply", body.toString());
-            JsonObject obj = JsonParser.parseString(resp).getAsJsonObject();
-            if (obj.has("error")) return obj.get("error").getAsString();
+            JsonObject data = new JsonObject();
+            data.addProperty("uid", uid);
+            data.addProperty("tech_sc", sc);
+            String r = post_json("/jobs/apply_to/" + jid, data.toString());
+            JsonObject obj = JsonParser.parseString(r).getAsJsonObject();
+            if (obj.has("err")) return obj.get("err").getAsString();
             return null;
         } catch (Exception e) {
-            return "Application failed.";
+            return "App failed.";
         }
     }
 
-    public static JsonObject getAdminAnalytics() {
+    public static JsonObject get_adm_stats() {
         try {
-            String resp = get("/admin/analytics");
-            return JsonParser.parseString(resp).getAsJsonObject();
+            String r = get("/admin/stats_dash");
+            return JsonParser.parseString(r).getAsJsonObject();
         } catch (Exception e) {
             return null;
         }
     }
 
-    public static JsonArray getUserApplications(int userId) {
+    public static JsonArray usr_history(int uid) {
         try {
-            return JsonParser.parseString(get("/jobs/applications/" + userId)).getAsJsonArray();
+            return JsonParser.parseString(get("/usr/history/" + uid)).getAsJsonArray();
         } catch (Exception e) {
             return new JsonArray();
         }
     }
 
-    public static JsonArray getApplicants(int jobId) {
+    public static JsonArray list_apps(int jid) {
         try {
-            return JsonParser.parseString(get("/jobs/" + jobId + "/applicants")).getAsJsonArray();
+            return JsonParser.parseString(get("/jobs/apps_for/" + jid)).getAsJsonArray();
         } catch (Exception e) {
             return new JsonArray();
         }
     }
 
-    public static String selectApplicant(int applicationId) {
+    public static String pick_app(int aid) {
         try {
-            String resp = postJson("/applicants/" + applicationId + "/select", "{}");
-            JsonObject obj = JsonParser.parseString(resp).getAsJsonObject();
-            if (obj.has("error")) return obj.get("error").getAsString();
+            String r = post_json("/applicants/ok/" + aid, "{}");
+            JsonObject obj = JsonParser.parseString(r).getAsJsonObject();
+            if (obj.has("err")) return obj.get("err").getAsString();
             return null;
         } catch (Exception e) {
-            return "Selection failed.";
+            return "Failed.";
         }
     }
 
-    public static JsonObject getResumeAnalytics(int userId) {
+    public static JsonObject get_cv_stats(int uid) {
         try {
-            String resp = get("/users/" + userId + "/resume/analytics");
-            return JsonParser.parseString(resp).getAsJsonObject();
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    public static JsonObject getUserProfile(int userId) {
-        try {
-            String resp = get("/users/" + userId);
-            return JsonParser.parseString(resp).getAsJsonObject();
+            String r = get("/usr/cv_stats/" + uid);
+            return JsonParser.parseString(r).getAsJsonObject();
         } catch (Exception e) {
             return null;
         }
     }
 
-    public static String updateUserProfile(int userId, String fullName, String email, String bio) {
+    public static String set_profile(int uid, String name, String mail, String bio) {
         try {
-            JsonObject body = new JsonObject();
-            body.addProperty("full_name", fullName);
-            body.addProperty("email",     email);
-            body.addProperty("bio",       bio);
-            String resp = putJson("/users/" + userId, body.toString());
-            JsonObject obj = JsonParser.parseString(resp).getAsJsonObject();
-            if (obj.has("error")) return obj.get("error").getAsString();
+            JsonObject data = new JsonObject();
+            data.addProperty("full_name", name);
+            data.addProperty("email",     mail);
+            data.addProperty("bio",       bio);
+            String r = put_json("/users/edit/" + uid, data.toString());
+            JsonObject obj = JsonParser.parseString(r).getAsJsonObject();
+            if (obj.has("err")) return obj.get("err").getAsString();
             return null;
         } catch (Exception e) {
-            return "Profile update failed.";
+            return "Up failed.";
         }
     }
 
-    public static JsonArray getNotifications(int userId) {
+    public static JsonObject see_profile(int uid) {
         try {
-            return JsonParser.parseString(get("/notifications/" + userId)).getAsJsonArray();
+            String r = get("/users/see/" + uid);
+            return JsonParser.parseString(r).getAsJsonObject();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public static JsonArray list_notifs(int uid) {
+        try {
+            return JsonParser.parseString(get("/notifications/new_for/" + uid)).getAsJsonArray();
         } catch (Exception e) {
             return new JsonArray();
         }
     }
 
-    public static void markNotificationRead(int id) {
-        try { postJson("/notifications/read/" + id, "{}"); } catch (Exception ignored) {}
+    public static void done_notif(int nid) {
+        try { post_json("/notifications/dismiss/" + nid, "{}"); } catch (Exception ignored) {}
     }
 
-    public static String provideFeedback(int appId, String feedback) {
+    public static String add_comment(int aid, String msg) {
         try {
-            String body = "{\"feedback\":\"" + esc(feedback) + "\"}";
-            String resp = postJson("/applications/" + appId + "/feedback", body);
-            JsonObject obj = JsonParser.parseString(resp).getAsJsonObject();
-            if (obj.has("error")) return obj.get("error").getAsString();
+            String b = "{\"feedback\":\"" + esc(msg) + "\"}";
+            String r = post_json("/applications/comment/" + aid, b);
+            JsonObject obj = JsonParser.parseString(r).getAsJsonObject();
+            if (obj.has("err")) return obj.get("err").getAsString();
             return null;
         } catch (Exception e) {
-            return "Failed to send feedback.";
+            return "Failed.";
+        }
+    }
+ 
+    public static String set_app_status(int aid, String s) {
+        try {
+            String b = "{\"status\":\"" + esc(s) + "\"}";
+            String r = put_json("/applications/set_state/" + aid, b);
+            JsonObject obj = JsonParser.parseString(r).getAsJsonObject();
+            if (obj.has("err")) return obj.get("err").getAsString();
+            return null;
+        } catch (Exception e) {
+            return "Stat failed.";
         }
     }
 
-    public static String forgotPassword(String username) {
+    public static String set_app_vibes(int aid, String v) {
         try {
-            String body = "{\"username\":\"" + esc(username) + "\"}";
-            String resp = postJson("/auth/forgot-password", body);
-            JsonObject obj = JsonParser.parseString(resp).getAsJsonObject();
-            if (obj.has("error")) return obj.get("error").getAsString();
+            String b = "{\"aid\":" + aid + ", \"v\":\"" + esc(v) + "\"}";
+            String r = post_json("/applications/set_vibes", b);
+            return r;
+        } catch (Exception e) {
+            return "Fail.";
+        }
+    }
+ 
+    public static String put_note(int uid, String n) {
+        try {
+            String b = "{\"note\":\"" + esc(n) + "\"}";
+            String r = post_json("/usr/notes/" + uid, b);
+            JsonObject obj = JsonParser.parseString(r).getAsJsonObject();
+            if (obj.has("err")) return obj.get("err").getAsString();
             return null;
         } catch (Exception e) {
-            return "Request failed.";
+            return "Note failed.";
+        }
+    }
+ 
+    public static JsonArray list_notes(int uid) {
+        try {
+            return JsonParser.parseString(get("/usr/notes/" + uid)).getAsJsonArray();
+        } catch (Exception e) {
+            return new JsonArray();
+        }
+    }
+ 
+    public static byte[] get_pdf(int uid) {
+        try {
+            URL url = new URL(BASE + "/resume/get_pdf/" + uid);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            if (conn.getResponseCode() == 200) {
+                try (InputStream is = conn.getInputStream();
+                     ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+                    byte[] buff = new byte[8192];
+                    int n;
+                    while ((n = is.read(buff)) != -1) baos.write(buff, 0, n);
+                    return baos.toByteArray();
+                }
+            }
+        } catch (Exception ignored) { }
+        return null;
+    }
+
+    public static JsonArray get_trajectory(int uid) {
+        try {
+            return JsonParser.parseString(get("/usr/trajectory/" + uid)).getAsJsonArray();
+        } catch (Exception e) { return new JsonArray(); }
+    }
+
+    public static JsonArray get_battle_users() {
+        try {
+            return JsonParser.parseString(get("/battle/users")).getAsJsonArray();
+        } catch (Exception e) { return new JsonArray(); }
+    }
+
+    public static JsonObject run_battle(int uid1, int uid2, int jid) {
+        try {
+            return JsonParser.parseString(get("/battle/" + uid1 + "/vs/" + uid2 + "/for/" + jid)).getAsJsonObject();
+        } catch (Exception e) { return new JsonObject(); }
+    }
+
+    public static String pass_forgot(String u) {
+        try {
+            String b = "{\"username\":\"" + esc(u) + "\"}";
+            String r = post_json("/auth/lost_password", b);
+            JsonObject obj = JsonParser.parseString(r).getAsJsonObject();
+            if (obj.has("err")) return obj.get("err").getAsString();
+            return null;
+        } catch (Exception e) {
+            return "Fail.";
         }
     }
 
-    public static String resetPassword(String token, String newPassword) {
+    public static String pass_reset(String tk, String pass) {
         try {
-            String body = "{\"token\":\"" + esc(token) + "\",\"password\":\"" + esc(newPassword) + "\"}";
-            String resp = postJson("/auth/reset-password", body);
-            JsonObject obj = JsonParser.parseString(resp).getAsJsonObject();
-            if (obj.has("error")) return obj.get("error").getAsString();
+            String b = "{\"token\":\"" + esc(tk) + "\",\"password\":\"" + esc(pass) + "\"}";
+            String r = post_json("/auth/reset_now", b);
+            JsonObject obj = JsonParser.parseString(r).getAsJsonObject();
+            if (obj.has("err")) return obj.get("err").getAsString();
             return null;
         } catch (Exception e) {
-            return "Reset failed.";
+            return "Fail.";
         }
     }
 
-    public static int socialLogin(String provider, String email) {
+    public static int social_in(String prov, String mail) {
         try {
-            String body = "{\"provider\":\"" + provider + "\",\"email\":\"" + email + "\"}";
-            String resp = postJson("/auth/social-login", body);
-            JsonObject obj = JsonParser.parseString(resp).getAsJsonObject();
-            if (obj.has("error")) return -1;
-            ResudexApp.currentUsername = obj.get("username").getAsString();
-            return obj.get("userId").getAsInt();
+            String b = "{\"provider\":\"" + prov + "\",\"email\":\"" + mail + "\"}";
+            String r = post_json("/auth/social_sign_in", b);
+            JsonObject obj = JsonParser.parseString(r).getAsJsonObject();
+            if (obj.has("err")) return -1;
+            ResudexApp.usr = obj.get("usr").getAsString();
+            return obj.get("uid").getAsInt();
         } catch (Exception e) {
             return -1;
         }
     }
 
-    private static String postJson(String endpoint, String jsonBody) throws Exception {
-        return sendJson(endpoint, "POST", jsonBody);
+    private static String post_json(String end, String b) throws Exception {
+        return push_json(end, "POST", b);
     }
 
-    private static String putJson(String endpoint, String jsonBody) throws Exception {
-        return sendJson(endpoint, "PUT", jsonBody);
+    private static String put_json(String end, String b) throws Exception {
+        return push_json(end, "PUT", b);
     }
 
-    private static String sendJson(String endpoint, String method, String jsonBody) throws Exception {
-        URL url = new URL(BASE + endpoint);
+    private static String push_json(String end, String m, String b) throws Exception {
+        URL url = new URL(BASE + end);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestMethod(method);
+        conn.setRequestMethod(m);
         conn.setRequestProperty("Content-Type", "application/json");
         conn.setDoOutput(true);
-        try (OutputStream os = conn.getOutputStream()) { os.write(jsonBody.getBytes("UTF-8")); }
-        return readResponse(conn);
+        try (OutputStream os = conn.getOutputStream()) { os.write(b.getBytes("UTF-8")); }
+        return read_resp(conn);
     }
 
-    private static String get(String endpoint) throws Exception {
-        URL url = new URL(BASE + endpoint);
+    private static String get(String end) throws Exception {
+        URL url = new URL(BASE + end);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("GET");
-        return readResponse(conn);
+        return read_resp(conn);
     }
 
-    private static String delete(String endpoint) throws Exception {
-        URL url = new URL(BASE + endpoint);
+    private static String delete(String end) throws Exception {
+        URL url = new URL(BASE + end);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("DELETE");
-        return readResponse(conn);
+        return read_resp(conn);
     }
 
-    private static String readResponse(HttpURLConnection conn) throws Exception {
-        InputStream stream = null;
-        try { stream = conn.getInputStream(); } catch (IOException e) { stream = conn.getErrorStream(); }
-        if (stream == null) return "{}";
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(stream, "UTF-8"))) {
+    private static String read_resp(HttpURLConnection conn) throws Exception {
+        InputStream s = null;
+        try { s = conn.getInputStream(); } catch (IOException e) { s = conn.getErrorStream(); }
+        if (s == null) return "{}";
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(s, "UTF-8"))) {
             StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = br.readLine()) != null) sb.append(line);
+            String l;
+            while ((l = br.readLine()) != null) sb.append(l);
             return sb.toString();
         }
     }
