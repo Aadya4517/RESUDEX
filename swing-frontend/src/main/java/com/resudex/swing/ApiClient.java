@@ -15,7 +15,7 @@ import java.nio.file.Files;
  */
 public class ApiClient {
 
-    public static final String BASE = "http://localhost:8080/api";
+    public static final String BASE = System.getProperty("api.url", "http://localhost:8080") + "/api";
 
     // reg a new guy
     public static String add_usr(String u, String p, String name, String mail) {
