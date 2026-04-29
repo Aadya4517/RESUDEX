@@ -15,30 +15,27 @@ import java.util.stream.Collectors;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
-/**
- * Controller for jobs and apps.
- * 200% Humanized logic.
- */
+// jobs and applications
 @RestController
 @CrossOrigin
 public class JobController {
 
     @Autowired
-    private DatabaseService app_db;
+    private DatabaseService db;
 
-    private final ResumeScorer doc_scorer = new ResumeScorer();
+    private final ResumeScorer scorer = new ResumeScorer();
 
-    // --- Listing ---
-
+    // list all jobs
     @GetMapping("/api/jobs/list")
-    public List<Map<String, Object>> list_all_jobs(@RequestParam(required = false) boolean is_adm) {
-        return app_db.list_all_jobs(is_adm);
+    public List<Map<String, Object>> getJobs(@RequestParam(required = false) boolean is_adm) {
+        return db.getJobs(is_adm);
     }
 
+    // get matched jobs for user
     @GetMapping("/api/jobs/matched_for/{uid}")
-    public ResponseEntity<?> get_usr_matches(@PathVariable int uid) {
+    public ResponseEntity<?> getMatches(@PathVariable int uid) {
         try {
-            List<Map<String, Object>> raw = app_db.list_all_jobs(false);
+            List<Map<String, Object>> raw = db.getJobs(false);
 
             Map<String, Map<String, Object>> m = new LinkedHashMap<>();
             for (Map<String, Object> j : raw) {
@@ -50,17 +47,17 @@ public class JobController {
             }
             List<Map<String, Object>> jobs = new ArrayList<>(m.values());
 
-            Map<String, Object> u = app_db.get_usr_by_id(uid);
+            Map<String, Object> u = db.getUser(uid);
 
             String txt = null;
-            String fname = "cv.pdf";
+            String fn = "cv.pdf";
             if (u != null) {
                 for (Map.Entry<String, Object> entry : u.entrySet()) {
                     if (entry.getKey().equalsIgnoreCase("resume_text") && entry.getValue() != null) {
-                        txt = get_raw_text(entry.getValue());
+                        txt = getRawText(entry.getValue());
                     }
                     if (entry.getKey().equalsIgnoreCase("resume_filename") && entry.getValue() != null) {
-                        fname = entry.getValue().toString();
+                        fn = entry.getValue().toString();
                     }
                 }
             }
@@ -84,7 +81,7 @@ public class JobController {
                     String desc  = descObj  != null ? descObj.toString()  : "";
                     String jd = title + "\n" + desc;
 
-                    ResumeScore res = doc_scorer.scan(fname, txt, jd);
+                    ResumeScore res = scorer.scan(fn, txt, jd);
                     j.put("sc",      res.get_sc());
                     j.put("hits",    res.get_hits());
                     j.put("miss",    res.get_miss());
@@ -113,81 +110,82 @@ public class JobController {
         }
     }
 
-    // --- Admin Ops ---
-
+    // create job
     @PostMapping("/api/jobs/create")
-    public ResponseEntity<Map<String, Object>> make_new_job(@RequestBody Map<String, String> payload) {
+    public ResponseEntity<Map<String, Object>> createJob(@RequestBody Map<String, String> payload) {
         String t = payload.get("title");
         String d = payload.get("description");
         String s = payload.getOrDefault("status", "OPEN");
-  
+
         if (t == null || t.isBlank() || d == null || d.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("err", "Fields missing"));
         }
-  
-        app_db.post_job(t.trim(), d.trim(), s.trim().toUpperCase());
+
+        db.postJob(t.trim(), d.trim(), s.trim().toUpperCase());
         return ResponseEntity.ok(Map.of("msg", "Job saved"));
     }
 
+    // edit job
     @PutMapping("/api/jobs/edit/{jid}")
-    public ResponseEntity<Map<String, Object>> modify_job(@PathVariable int jid, @RequestBody Map<String, String> payload) {
+    public ResponseEntity<Map<String, Object>> editJob(@PathVariable int jid, @RequestBody Map<String, String> payload) {
         String t = payload.get("title");
         String d = payload.get("description");
         String s = payload.getOrDefault("status", "OPEN");
-  
+
         if (t == null || t.isBlank() || d == null || d.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("err", "Fields missing"));
         }
-  
-        app_db.edit_job_data(jid, t.trim(), d.trim(), s.trim().toUpperCase());
+
+        db.editJob(jid, t.trim(), d.trim(), s.trim().toUpperCase());
         return ResponseEntity.ok(Map.of("msg", "Updated"));
     }
 
+    // delete job
     @DeleteMapping("/api/jobs/drop/{jid}")
-    public ResponseEntity<Map<String, Object>> kill_job_data(@PathVariable int jid) {
-        app_db.kill_job(jid);
+    public ResponseEntity<Map<String, Object>> deleteJob(@PathVariable int jid) {
+        db.deleteJob(jid);
         return ResponseEntity.ok(Map.of("msg", "Removed"));
     }
 
-    // --- Applications ---
-
+    // apply to job
     @PostMapping("/api/jobs/apply_to/{jid}")
-    public ResponseEntity<Map<String, Object>> push_app(
+    public ResponseEntity<Map<String, Object>> applyJob(
             @PathVariable int jid,
             @RequestBody Map<String, Object> body
     ) {
         int uid = ((Number) body.get("uid")).intValue();
-        int tech_sc = body.containsKey("tech_sc") ? ((Number) body.get("tech_sc")).intValue() : -1;
+        int techSc = body.containsKey("tech_sc") ? ((Number) body.get("tech_sc")).intValue() : -1;
 
-        Map<String, Object> usr = app_db.get_usr_by_id(uid);
+        Map<String, Object> usr = db.getUser(uid);
         if (usr == null) return ResponseEntity.badRequest().body(Map.of("err", "No user"));
-        
-        String txt = get_raw_text(usr.get("resume_text"));
+
+        String txt = getRawText(usr.get("resume_text"));
         if (txt == null || txt.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("err", "Upload CV first!"));
         }
 
-        boolean ok = app_db.sub_app(uid, jid, tech_sc);
+        boolean ok = db.apply(uid, jid, techSc);
         if (ok) return ResponseEntity.ok(Map.of("msg", "Success"));
         else return ResponseEntity.badRequest().body(Map.of("err", "Already applied"));
     }
 
+    // get apps for job
     @GetMapping("/api/jobs/apps_for/{jid}")
-    public List<Map<String, Object>> fetch_apps(@PathVariable int jid) {
-        Map<String, Object> job = app_db.get_job_info(jid);
+    public List<Map<String, Object>> getApps(@PathVariable int jid) {
+        Map<String, Object> job = db.getJob(jid);
         if (job == null) return Collections.emptyList();
 
         String jd = (String) job.get("description");
-        List<Map<String, Object>> apps = app_db.list_apps_for_job(jid);
+        List<Map<String, Object>> apps = db.getApps(jid);
         List<Map<String, Object>> out = new ArrayList<>();
 
         for (Map<String, Object> a : apps) {
-            String txt = get_raw_text(a.get("resume_text"));
+            String txt = getRawText(a.get("resume_text"));
             Map<String, Object> row = new LinkedHashMap<>(a);
             String f = (String) a.getOrDefault("resume_filename", "cv.pdf");
 
             if (txt != null && !txt.isBlank()) {
-                ResumeScore res = doc_scorer.scan(f, txt, jd);
+                ResumeScore res = scorer.scan(f, txt, jd);
                 row.put("sc", res.get_sc());
                 row.put("hits", res.get_hits());
                 row.put("miss", res.get_miss());
@@ -204,119 +202,127 @@ public class JobController {
         return out;
     }
 
+    // shortlist applicant
     @PostMapping("/api/applicants/ok/{aid}")
-    public ResponseEntity<Map<String, Object>> shortlist_usr(@PathVariable int aid) {
-        app_db.pick_applicant(aid);
-        int uid = app_db.find_uid(aid);
-        if (uid != -1) app_db.push_notif(uid, "🎉 Shortlisted!");
+    public ResponseEntity<Map<String, Object>> shortlist(@PathVariable int aid) {
+        db.shortlist(aid);
+        int uid = db.getUid(aid);
+        if (uid != -1) db.notify(uid, "🎉 Shortlisted!");
         return ResponseEntity.ok(Map.of("msg", "Done"));
     }
 
+    // send feedback
     @PostMapping("/api/applications/comment/{aid}")
-    public ResponseEntity<Map<String, Object>> send_feedback(@PathVariable int aid, @RequestBody Map<String, String> body) {
+    public ResponseEntity<Map<String, Object>> sendFeedback(@PathVariable int aid, @RequestBody Map<String, String> body) {
         String fbk = body.get("feedback");
         if (fbk == null) return ResponseEntity.badRequest().body(Map.of("err", "No text"));
-        app_db.give_feedback(aid, fbk.trim());
+        db.setFeedback(aid, fbk.trim());
         return ResponseEntity.ok(Map.of("msg", "Sent"));
     }
 
+    // set app status
     @PutMapping("/api/applications/set_state/{aid}")
-    public ResponseEntity<Map<String, Object>> edit_app_stat(@PathVariable int aid, @RequestBody Map<String, String> payload) {
+    public ResponseEntity<Map<String, Object>> setAppStatus(@PathVariable int aid, @RequestBody Map<String, String> payload) {
         String s = payload.get("status");
         if (s == null || s.isBlank()) return ResponseEntity.badRequest().body(Map.of("err", "No stat"));
-        app_db.change_app_status(aid, s.trim().toUpperCase());
-        
-        int uid = app_db.find_uid(aid);
+        db.setStatus(aid, s.trim().toUpperCase());
+
+        int uid = db.getUid(aid);
         if (uid != -1) {
-            String m = "📋 Update: " + s.toUpperCase();
-            if (s.equalsIgnoreCase("HIRED")) m = "🎊 HIRED! Awesome!";
-            app_db.push_notif(uid, m);
+            String msg = "📋 Update: " + s.toUpperCase();
+            if (s.equalsIgnoreCase("HIRED")) msg = "🎊 HIRED! Awesome!";
+            db.notify(uid, msg);
         }
         return ResponseEntity.ok(Map.of("msg", "Updated"));
     }
 
-    // --- Notes & Stats ---
-
+    // add admin note
     @PostMapping("/api/usr/notes/{uid}")
-    public ResponseEntity<Map<String, Object>> post_note(@PathVariable int uid, @RequestBody Map<String, String> body) {
+    public ResponseEntity<Map<String, Object>> addNote(@PathVariable int uid, @RequestBody Map<String, String> body) {
         String n = body.get("note");
         if (n == null) return ResponseEntity.badRequest().body(Map.of("err", "No note"));
-        app_db.add_note(uid, n);
+        db.addNote(uid, n);
         return ResponseEntity.ok(Map.of("msg", "Saved"));
     }
 
+    // set vibes tag
     @PostMapping("/api/applications/set_vibes")
-    public ResponseEntity<String> set_vibes(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<String> setVibes(@RequestBody Map<String, Object> body) {
         int aid = (int) body.get("aid");
         String v = (String) body.get("v");
-        app_db.set_app_vibes(aid, v);
+        db.setVibes(aid, v);
         return ResponseEntity.ok("Vibes saved.");
     }
 
+    // get notes
     @GetMapping("/api/usr/notes/{uid}")
-    public List<Map<String, Object>> show_notes(@PathVariable int uid) {
-        return app_db.get_notes(uid);
+    public List<Map<String, Object>> getNotes(@PathVariable int uid) {
+        return db.getNotes(uid);
     }
 
+    // download pdf report
     @GetMapping("/api/jobs/report/{jid}/{aid}")
-    public ResponseEntity<byte[]> fetch_pdf_rep(@PathVariable int jid, @PathVariable int aid) {
-        Map<String, Object> job = app_db.get_job_info(jid);
-        List<Map<String, Object>> apps = app_db.list_apps_for_job(jid);
+    public ResponseEntity<byte[]> getReport(@PathVariable int jid, @PathVariable int aid) {
+        Map<String, Object> job = db.getJob(jid);
+        List<Map<String, Object>> apps = db.getApps(jid);
         Map<String, Object> a = apps.stream()
             .filter(item -> ((Number)item.get("app_id")).intValue() == aid)
             .findFirst().orElse(null);
-  
+
         if (job == null || a == null) return ResponseEntity.notFound().build();
-  
-        String txt = get_raw_text(a.get("resume_text"));
+
+        String txt = getRawText(a.get("resume_text"));
         String title = (String) job.get("title");
         String name = (String) a.get("username");
-  
-        ResumeScore res = doc_scorer.scan("cv.pdf", txt, (String) job.get("description"));
+
+        ResumeScore res = scorer.scan("cv.pdf", txt, (String) job.get("description"));
         byte[] pdf = PdfUtil.generateShortlistReport(res, name, title);
-  
+
         return ResponseEntity.ok()
             .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"rep_" + name + ".pdf\"")
             .contentType(MediaType.APPLICATION_PDF)
             .body(pdf);
     }
 
+    // user application history
     @GetMapping("/api/usr/history/{uid}")
-    public List<Map<String, Object>> my_apps(@PathVariable int uid) {
-        return app_db.usr_apps(uid);
+    public List<Map<String, Object>> getHistory(@PathVariable int uid) {
+        return db.getUserApps(uid);
     }
 
+    // cv stats
     @GetMapping("/api/usr/cv_stats/{uid}")
-    public ResponseEntity<Map<String, Object>> show_cv_stats(@PathVariable int uid) {
-        Map<String, Object> u = app_db.get_usr_by_id(uid);
+    public ResponseEntity<Map<String, Object>> getStats(@PathVariable int uid) {
+        Map<String, Object> u = db.getUser(uid);
         if (u == null || u.get("resume_text") == null) {
             return ResponseEntity.badRequest().body(Map.of("err", "No CV found"));
         }
 
-        String txt = get_raw_text(u.get("resume_text"));
+        String txt = getRawText(u.get("resume_text"));
         String f = (String) u.getOrDefault("resume_filename", "cv.pdf");
-        ResumeScore res = doc_scorer.scan(f, txt, ""); 
-        
+        ResumeScore res = scorer.scan(f, txt, "");
+
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("domain_fit", res.get_domains());
         out.put("role_fit", res.get_roles());
         out.put("exp_yrs", res.get_exp());
-        
+
         List<String> top = res.get_domains().entrySet().stream()
             .filter(e -> e.getValue() > 0)
-            .sorted((a,b) -> b.getValue() - a.getValue())
+            .sorted((a, b) -> b.getValue() - a.getValue())
             .map(Map.Entry::getKey)
             .collect(Collectors.toList());
-        
+
         out.put("top_doms", top);
         return ResponseEntity.ok(out);
     }
 
+    // generate cover letter
     @PostMapping("/api/jobs/gen_letter/{jid}")
-    public ResponseEntity<Map<String, Object>> gen_letter(@PathVariable int jid, @RequestBody Map<String, Integer> payload) {
+    public ResponseEntity<Map<String, Object>> genLetter(@PathVariable int jid, @RequestBody Map<String, Integer> payload) {
         int uid = payload.get("uid");
-        Map<String, Object> job = app_db.get_job_info(jid);
-        Map<String, Object> user = app_db.get_usr_by_id(uid);
+        Map<String, Object> job = db.getJob(jid);
+        Map<String, Object> user = db.getUser(uid);
 
         if (job == null || user == null) return ResponseEntity.badRequest().body(Map.of("err", "Bad IDs"));
 
@@ -333,18 +339,16 @@ public class JobController {
         return ResponseEntity.ok(Map.of("msg", txt));
     }
 
-    // ── SKILL TRAJECTORY ──────────────────────────────────────────────────────
-
+    // skill trajectory
     @GetMapping("/api/usr/trajectory/{uid}")
-    public ResponseEntity<List<Map<String, Object>>> get_trajectory(@PathVariable int uid) {
-        return ResponseEntity.ok(app_db.get_snapshots(uid));
+    public ResponseEntity<List<Map<String, Object>>> getTrajectory(@PathVariable int uid) {
+        return ResponseEntity.ok(db.getSnapshots(uid));
     }
 
-    // ── RESUME BATTLE ─────────────────────────────────────────────────────────
-
+    // battle users list
     @GetMapping("/api/battle/users")
-    public ResponseEntity<List<Map<String, Object>>> battle_users() {
-        List<Map<String, Object>> users = app_db.get_all_users_with_resume();
+    public ResponseEntity<List<Map<String, Object>>> getBattleUsers() {
+        List<Map<String, Object>> users = db.getUsersWithResume();
         List<Map<String, Object>> out = new ArrayList<>();
         for (Map<String, Object> u : users) {
             Map<String, Object> row = new LinkedHashMap<>();
@@ -356,25 +360,26 @@ public class JobController {
         return ResponseEntity.ok(out);
     }
 
+    // run resume battle
     @GetMapping("/api/battle/{uid1}/vs/{uid2}/for/{jid}")
-    public ResponseEntity<Map<String, Object>> run_battle(
+    public ResponseEntity<Map<String, Object>> runBattle(
             @PathVariable int uid1, @PathVariable int uid2, @PathVariable int jid) {
-        Map<String, Object> job = app_db.get_job_info(jid);
+        Map<String, Object> job = db.getJob(jid);
         if (job == null) return ResponseEntity.badRequest().body(Map.of("error", "Job not found"));
 
         String jd = job.get("title") + "\n" + job.get("description");
 
-        Map<String, Object> u1 = app_db.get_usr_by_id(uid1);
-        Map<String, Object> u2 = app_db.get_usr_by_id(uid2);
+        Map<String, Object> u1 = db.getUser(uid1);
+        Map<String, Object> u2 = db.getUser(uid2);
         if (u1 == null || u2 == null) return ResponseEntity.badRequest().body(Map.of("error", "User not found"));
 
-        String txt1 = get_raw_text(u1.get("resume_text"));
-        String txt2 = get_raw_text(u2.get("resume_text"));
+        String txt1 = getRawText(u1.get("resume_text"));
+        String txt2 = getRawText(u2.get("resume_text"));
         String f1   = u1.getOrDefault("resume_filename", "cv.pdf").toString();
         String f2   = u2.getOrDefault("resume_filename", "cv.pdf").toString();
 
-        ResumeScore r1 = doc_scorer.scan(f1, txt1, jd);
-        ResumeScore r2 = doc_scorer.scan(f2, txt2, jd);
+        ResumeScore r1 = scorer.scan(f1, txt1, jd);
+        ResumeScore r2 = scorer.scan(f2, txt2, jd);
 
         Map<String, Object> p1 = new LinkedHashMap<>();
         p1.put("uid",      uid1);
@@ -408,13 +413,15 @@ public class JobController {
         return ResponseEntity.ok(result);
     }
 
-    @GetMapping("/api/debug/user/{uid}")    public ResponseEntity<Map<String, Object>> debug_user(@PathVariable int uid) {
-        Map<String, Object> u = app_db.get_usr_by_id(uid);
+    // debug user
+    @GetMapping("/api/debug/user/{uid}")
+    public ResponseEntity<Map<String, Object>> debugUser(@PathVariable int uid) {
+        Map<String, Object> u = db.getUser(uid);
         if (u == null) return ResponseEntity.ok(Map.of("error", "user not found"));
         Map<String, Object> out = new LinkedHashMap<>();
         for (Map.Entry<String, Object> e : u.entrySet()) {
             if (e.getKey().equalsIgnoreCase("resume_text")) {
-                String txt = get_raw_text(e.getValue());
+                String txt = getRawText(e.getValue());
                 out.put(e.getKey(), txt == null ? "NULL" : "LENGTH=" + txt.length() + " PREVIEW=" + txt.substring(0, Math.min(100, txt.length())));
             } else {
                 out.put(e.getKey(), e.getValue());
@@ -423,20 +430,22 @@ public class JobController {
         return ResponseEntity.ok(out);
     }
 
-    @GetMapping("/api/admin/stats_dash")    public ResponseEntity<Map<String, Object>> admin_hub() {
-        List<Map<String, Object>> jobs = app_db.list_all_jobs(true);
+    // admin stats dashboard
+    @GetMapping("/api/admin/stats_dash")
+    public ResponseEntity<Map<String, Object>> getAdminStats() {
+        List<Map<String, Object>> jobs = db.getJobs(true);
         int total = 0, picked = 0;
         Map<String, Integer> trends = new HashMap<>();
 
         for (Map<String, Object> j : jobs) {
             int jid = (int) j.get("id");
-            List<Map<String, Object>> apps = app_db.list_apps_for_job(jid);
+            List<Map<String, Object>> apps = db.getApps(jid);
             total += apps.size();
             for (Map<String, Object> a : apps) {
                 if ("SELECTED".equalsIgnoreCase((String)a.get("status"))) picked++;
             }
             String jd = (String) j.get("description");
-            Set<String> s = doc_scorer.scan("", "", jd).get_hits();
+            Set<String> s = scorer.scan("", "", jd).get_hits();
             for (String item : s) trends.put(item, trends.getOrDefault(item, 0) + 1);
         }
 
@@ -449,7 +458,8 @@ public class JobController {
         return ResponseEntity.ok(res);
     }
 
-    private String get_raw_text(Object obj) {
+    // extract text from clob or string
+    private String getRawText(Object obj) {
         if (obj == null) return "";
         if (obj instanceof String) {
             return (String) obj;
@@ -462,7 +472,6 @@ public class JobController {
                 return c.getSubString(1, (int) len);
             } catch (Exception e) {
                 try {
-                    // fallback: read via Reader
                     java.io.Reader r = c.getCharacterStream();
                     java.io.BufferedReader br = new java.io.BufferedReader(r);
                     StringBuilder sb = new StringBuilder();

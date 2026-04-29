@@ -9,17 +9,16 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Map;
 
-/**
- * Auth Controller.
- */
+// auth endpoints
 @RestController
 @RequestMapping("/api/auth")
 @CrossOrigin
 public class AuthController {
 
     @Autowired
-    private DatabaseService main_db;
+    private DatabaseService db;
 
+    // hash password
     private static String hash(String raw) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
@@ -30,9 +29,9 @@ public class AuthController {
         } catch (Exception e) { return raw; }
     }
 
-    // --- Register ---
+    // register user
     @PostMapping("/register_usr")
-    public ResponseEntity<Map<String, Object>> do_register(@RequestBody Map<String, String> payload) {
+    public ResponseEntity<Map<String, Object>> register(@RequestBody Map<String, String> payload) {
         String usr = payload.get("username");
         String pass = payload.get("password");
         String name = payload.getOrDefault("f_name", "");
@@ -42,7 +41,7 @@ public class AuthController {
             return ResponseEntity.badRequest().body(Map.of("err", "Username and password needed"));
         }
 
-        boolean ok = main_db.add_new_user(usr.trim(), hash(pass.trim()), name, mail);
+        boolean ok = db.addUser(usr.trim(), hash(pass.trim()), name, mail);
         if (ok) {
             return ResponseEntity.ok(Map.of("msg", "Reg ok! Log in now."));
         } else {
@@ -50,13 +49,13 @@ public class AuthController {
         }
     }
 
-    // --- User Log In ---
+    // user login
     @PostMapping("/log_in")
-    public ResponseEntity<Map<String, Object>> do_login(@RequestBody Map<String, String> req) {
+    public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> req) {
         String usr = req.get("username");
         String pass = req.get("password");
 
-        Map<String, Object> data = main_db.auth_usr(usr, hash(pass));
+        Map<String, Object> data = db.loginUser(usr, hash(pass));
         if (data != null) {
             return ResponseEntity.ok(Map.of(
                 "uid", data.get("id"),
@@ -68,13 +67,13 @@ public class AuthController {
         }
     }
 
-    // --- Admin Log In ---
+    // admin login
     @PostMapping("/admin_log_in")
-    public ResponseEntity<Map<String, Object>> admin_auth(@RequestBody Map<String, String> params) {
+    public ResponseEntity<Map<String, Object>> loginAdmin(@RequestBody Map<String, String> params) {
         String usr = params.get("username");
         String pass = params.get("password");
 
-        Map<String, Object> adm = main_db.auth_admin(usr, hash(pass));
+        Map<String, Object> adm = db.loginAdmin(usr, hash(pass));
         if (adm != null) {
             return ResponseEntity.ok(Map.of("msg", "Admin log in ok", "role", "ADMIN", "aid", adm.get("id")));
         } else {
@@ -82,43 +81,44 @@ public class AuthController {
         }
     }
 
-    // --- Pass Reset ---
+    // forgot password
     @PostMapping("/lost_password")
-    public ResponseEntity<Map<String, Object>> forgot_pass(@RequestBody Map<String, String> body) {
+    public ResponseEntity<Map<String, Object>> forgotPw(@RequestBody Map<String, String> body) {
         String usr = body.get("username");
         if (usr == null || usr.isBlank()) return ResponseEntity.badRequest().body(Map.of("err", "User needed"));
-        
+
         String tok = java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        main_db.save_reset_token(usr, tok);
-        
+        db.saveToken(usr, tok);
+
         System.out.println("RESET TOKEN FOR " + usr + ": " + tok);
         return ResponseEntity.ok(Map.of("msg", "Check logs for code"));
     }
 
+    // reset password
     @PostMapping("/reset_now")
-    public ResponseEntity<Map<String, Object>> reset_pass(@RequestBody Map<String, String> input) {
+    public ResponseEntity<Map<String, Object>> resetPw(@RequestBody Map<String, String> input) {
         String tok = input.get("token");
         String pass = input.get("password");
-        
+
         if (tok == null || pass == null) return ResponseEntity.badRequest().body(Map.of("err", "Need token and pass"));
-        
-        boolean done = main_db.do_pw_reset(tok, hash(pass));
+
+        boolean done = db.resetPw(tok, hash(pass));
         if (done) return ResponseEntity.ok(Map.of("msg", "Pass reset ok!"));
         else return ResponseEntity.badRequest().body(Map.of("err", "Invalid token"));
     }
 
-    // --- Social ---
+    // social sign in
     @PostMapping("/social_sign_in")
-    public ResponseEntity<Map<String, Object>> social_auth(@RequestBody Map<String, String> data) {
-        String type = data.get("provider"); 
+    public ResponseEntity<Map<String, Object>> socialLogin(@RequestBody Map<String, String> data) {
+        String type = data.get("provider");
         String mail = data.get("email");
-        
+
         String pass = "mock_social_pass";
         String usr = mail.split("@")[0];
-        
-        main_db.add_new_user(usr, hash(pass), usr, mail);
-        Map<String, Object> u = main_db.auth_usr(usr, hash(pass));
-        
+
+        db.addUser(usr, hash(pass), usr, mail);
+        Map<String, Object> u = db.loginUser(usr, hash(pass));
+
         return ResponseEntity.ok(Map.of(
             "uid", u.get("id"),
             "usr", u.get("username"),

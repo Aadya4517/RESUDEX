@@ -10,14 +10,14 @@ public class SkillRegistry {
     public static final Map<String, SkillCategory> SKILLS = new HashMap<>();
 
     static {
-        // Programming Languages
+        // programming languages
         SKILLS.put("java", SkillCategory.PROGRAMMING);
         SKILLS.put("python", SkillCategory.PROGRAMMING);
         SKILLS.put("c", SkillCategory.PROGRAMMING);
         SKILLS.put("c++", SkillCategory.PROGRAMMING);
         SKILLS.put("sql", SkillCategory.PROGRAMMING);
 
-        // Web Development
+        // web dev
         SKILLS.put("html", SkillCategory.WEB);
         SKILLS.put("css", SkillCategory.WEB);
         SKILLS.put("javascript", SkillCategory.WEB);
@@ -27,14 +27,14 @@ public class SkillRegistry {
         SKILLS.put("next.js", SkillCategory.WEB);
         SKILLS.put("tailwind", SkillCategory.WEB);
 
-        // Backend
+        // backend
         SKILLS.put("spring", SkillCategory.BACKEND);
         SKILLS.put("spring boot", SkillCategory.BACKEND);
         SKILLS.put("rest", SkillCategory.BACKEND);
         SKILLS.put("microservices", SkillCategory.BACKEND);
         SKILLS.put("node", SkillCategory.BACKEND);
 
-        // Data / Python Stack / AI
+        // data / ai
         SKILLS.put("pandas", SkillCategory.DATA);
         SKILLS.put("numpy", SkillCategory.DATA);
         SKILLS.put("data analysis", SkillCategory.DATA);
@@ -44,7 +44,7 @@ public class SkillRegistry {
         SKILLS.put("pinecone", SkillCategory.DATA);
         SKILLS.put("vector db", SkillCategory.DATA);
 
-        // DevOps / Cloud
+        // devops / cloud
         SKILLS.put("docker", SkillCategory.DEVOPS);
         SKILLS.put("git", SkillCategory.DEVOPS);
         SKILLS.put("linux", SkillCategory.DEVOPS);
@@ -55,6 +55,7 @@ public class SkillRegistry {
         SKILLS.put("serverless", SkillCategory.DEVOPS);
     }
 
+    // get skill category
     public static SkillCategory getCategory(String skill) {
         return SKILLS.get(skill);
     }

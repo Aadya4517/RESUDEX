@@ -5,16 +5,13 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * SectionedResume - Splits raw resume text into logical blocks (Experience, Projects, Education, etc.)
- * for more granular analysis and weighted scoring.
- */
+// splits resume into sections
 public class SectionedResume {
 
-    private final String rawText;
+    private final String raw;
     private final Map<String, String> sections = new HashMap<>();
 
-    // Section markers (common headers)
+    // section markers
     private static final Map<String, Pattern> MARKERS = Map.of(
             "EXPERIENCE", Pattern.compile("(?i)(experience|work history|employment|professional background)"),
             "PROJECTS",   Pattern.compile("(?i)(projects|academic projects|personal projects|technical projects)"),
@@ -23,39 +20,38 @@ public class SectionedResume {
     );
 
     public SectionedResume(String text) {
-        this.rawText = text;
+        this.raw = text;
         parse();
     }
 
     private void parse() {
-        String lower = rawText.toLowerCase();
-        
-        // Find best-guess start indices for each section
-        Map<String, Integer> startIndices = new HashMap<>();
-        for (Map.Entry<String, Pattern> entry : MARKERS.entrySet()) {
-            Matcher m = entry.getValue().matcher(lower);
+        String low = raw.toLowerCase();
+
+        // find section start indices
+        Map<String, Integer> idx = new HashMap<>();
+        for (Map.Entry<String, Pattern> e : MARKERS.entrySet()) {
+            Matcher m = e.getValue().matcher(low);
             if (m.find()) {
-                startIndices.put(entry.getKey(), m.start());
+                idx.put(e.getKey(), m.start());
             }
         }
 
-        // Sort indices to determine section bounds
-        java.util.List<Map.Entry<String, Integer>> sorted = new java.util.ArrayList<>(startIndices.entrySet());
+        // sort by position
+        java.util.List<Map.Entry<String, Integer>> sorted = new java.util.ArrayList<>(idx.entrySet());
         sorted.sort(Map.Entry.comparingByValue());
 
         for (int i = 0; i < sorted.size(); i++) {
-            String currentSection = sorted.get(i).getKey();
+            String sec = sorted.get(i).getKey();
             int start = sorted.get(i).getValue();
-            int end = (i + 1 < sorted.size()) ? sorted.get(i + 1).getValue() : rawText.length();
-            
-            sections.put(currentSection, rawText.substring(start, end).trim());
+            int end = (i + 1 < sorted.size()) ? sorted.get(i + 1).getValue() : raw.length();
+            sections.put(sec, raw.substring(start, end).trim());
         }
 
-        // Anything before the first section is likely "Summary" or "Header"
+        // header before first section
         if (!sorted.isEmpty() && sorted.get(0).getValue() > 0) {
-            sections.put("HEADER", rawText.substring(0, sorted.get(0).getValue()).trim());
+            sections.put("HEADER", raw.substring(0, sorted.get(0).getValue()).trim());
         } else if (sorted.isEmpty()) {
-            sections.put("HEADER", rawText.trim()); // Fallback
+            sections.put("HEADER", raw.trim());
         }
     }
 
@@ -63,13 +59,13 @@ public class SectionedResume {
         return sections.getOrDefault(name, "");
     }
 
-    public boolean hasSkill(String sectionName, String skill) {
-        String content = sections.get(sectionName);
+    public boolean hasSkill(String sec, String skill) {
+        String content = sections.get(sec);
         if (content == null) return false;
         return content.toLowerCase().contains(skill.toLowerCase());
     }
 
     public String getRawText() {
-        return rawText;
+        return raw;
     }
 }

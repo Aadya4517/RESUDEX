@@ -5,8 +5,9 @@ import java.util.stream.Collectors;
 
 public class MandatorySkillExtractor {
 
-    public static Set<String> extractMandatorySkills(String jobDescription) {
-        return SkillExtractor.extractSkills(jobDescription)
+    // extract top mandatory skills
+    public static Set<String> extractMandatorySkills(String jd) {
+        return SkillExtractor.extractSkills(jd)
                 .stream()
                 .limit(3)
                 .collect(Collectors.toSet());

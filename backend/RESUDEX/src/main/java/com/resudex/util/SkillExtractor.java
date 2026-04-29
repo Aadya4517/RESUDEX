@@ -5,24 +5,24 @@ import java.util.Set;
 
 public class SkillExtractor {
 
-    public static Set<String> extractSkills(String text) {
+    // extract skills from text
+    public static Set<String> extractSkills(String txt) {
+        Set<String> found = new HashSet<>();
+        String low = txt.toLowerCase();
 
-        Set<String> foundSkills = new HashSet<>();
-        String lower = text.toLowerCase();
-
-        for (String raw : lower.split("\\W+")) {
-            String normalized = SkillDictionary.normalize(raw);
-            if (SkillRegistry.SKILLS.containsKey(normalized)) {
-                foundSkills.add(normalized);
+        for (String raw : low.split("\\W+")) {
+            String norm = SkillDictionary.normalize(raw);
+            if (SkillRegistry.SKILLS.containsKey(norm)) {
+                found.add(norm);
             }
         }
 
         for (String phrase : SkillRegistry.SKILLS.keySet()) {
-            if (lower.contains(phrase)) {
-                foundSkills.add(phrase);
+            if (low.contains(phrase)) {
+                found.add(phrase);
             }
         }
 
-        return foundSkills;
+        return found;
     }
 }

@@ -5,35 +5,36 @@ import java.util.Map;
 
 public class SkillDictionary {
 
-    private static final Map<String, String> NORMALIZATION_MAP = new HashMap<>();
+    private static final Map<String, String> NORM = new HashMap<>();
 
     static {
-        NORMALIZATION_MAP.put("springboot", "spring boot");
-        NORMALIZATION_MAP.put("spring-boot", "spring boot");
-        NORMALIZATION_MAP.put("restful", "rest");
-        NORMALIZATION_MAP.put("nodejs", "node.js");
-        NORMALIZATION_MAP.put("js", "javascript");
-        NORMALIZATION_MAP.put("postgres", "sql");
-        NORMALIZATION_MAP.put("rdbms", "sql");
-        NORMALIZATION_MAP.put("c plus plus", "c++");
-        NORMALIZATION_MAP.put("cpp", "c++");
-        NORMALIZATION_MAP.put("py", "python");
-        NORMALIZATION_MAP.put("api development", "rest");
-        NORMALIZATION_MAP.put("nextjs", "next.js");
-        NORMALIZATION_MAP.put("tailwind css", "tailwind");
-        NORMALIZATION_MAP.put("genai", "generative ai");
-        NORMALIZATION_MAP.put("llms", "llm");
-        NORMALIZATION_MAP.put("vector database", "vector db");
-        NORMALIZATION_MAP.put("langchain", "langchain");
-        NORMALIZATION_MAP.put("pinecone", "pinecone");
-        NORMALIZATION_MAP.put("aws lambda", "serverless");
-        NORMALIZATION_MAP.put("serverless architecture", "serverless");
-        NORMALIZATION_MAP.put("azure functions", "serverless");
-        NORMALIZATION_MAP.put("google cloud platform", "gcp");
+        NORM.put("springboot", "spring boot");
+        NORM.put("spring-boot", "spring boot");
+        NORM.put("restful", "rest");
+        NORM.put("nodejs", "node.js");
+        NORM.put("js", "javascript");
+        NORM.put("postgres", "sql");
+        NORM.put("rdbms", "sql");
+        NORM.put("c plus plus", "c++");
+        NORM.put("cpp", "c++");
+        NORM.put("py", "python");
+        NORM.put("api development", "rest");
+        NORM.put("nextjs", "next.js");
+        NORM.put("tailwind css", "tailwind");
+        NORM.put("genai", "generative ai");
+        NORM.put("llms", "llm");
+        NORM.put("vector database", "vector db");
+        NORM.put("langchain", "langchain");
+        NORM.put("pinecone", "pinecone");
+        NORM.put("aws lambda", "serverless");
+        NORM.put("serverless architecture", "serverless");
+        NORM.put("azure functions", "serverless");
+        NORM.put("google cloud platform", "gcp");
     }
 
+    // normalize skill name
     public static String normalize(String skill) {
         String key = skill.toLowerCase().trim();
-        return NORMALIZATION_MAP.getOrDefault(key, key);
+        return NORM.getOrDefault(key, key);
     }
 }

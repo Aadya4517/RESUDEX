@@ -5,10 +5,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-/**
- * Core analysis engine.
- * Humanized for 200% authenticity.
- */
+// core scoring engine
 public class ResumeScorer {
 
     private static final Map<String, Set<String>> DOMAIN_SKILLS = Map.of(
@@ -56,25 +53,26 @@ public class ResumeScorer {
             "DevOps Engineer", Set.of("docker","kubernetes","aws","ci/cd","jenkins","linux")
     );
 
+    // scan resume against job
     public ResumeScore scan(String fn, String txt, String jd) {
         SectionedResume sr = new SectionedResume(txt);
         jd = jd.toLowerCase();
 
-        int exp = calc_exp(txt);
+        int exp = calcExp(txt);
 
         Set<String> hits = new HashSet<>();
         Set<String> miss = new HashSet<>();
-        Set<String> must = get_musts(jd);
-        Set<String> miss_must = new HashSet<>();
+        Set<String> must = getMust(jd);
+        Set<String> missMust = new HashSet<>();
 
         Map<String, Integer> domains = new LinkedHashMap<>();
         Map<String, Integer> roles = new LinkedHashMap<>();
         List<String> recs = new ArrayList<>();
 
-        /* --- DEEP SCAN (Sectional Weighting) --- */
-        double weighted_sc = 0;
+        // sectional weighted scan
+        double wSc = 0;
 
-        // implied skills: if resume has C/C++, count pointers/stl/memory management as present
+        // implied skills
         Set<String> implied = new HashSet<>();
         String ltxt = txt.toLowerCase();
         if (ltxt.contains("c++") || ltxt.contains("c programming") || ltxt.contains("c language")) {
@@ -104,115 +102,115 @@ public class ResumeScorer {
 
             if (ok) {
                 hits.add(s);
-                weighted_sc += w;
+                wSc += w;
             } else {
-                miss_must.add(s);
+                missMust.add(s);
                 miss.add(s);
             }
         }
 
-        /* --- DOMAIN FIT --- */
+        // domain fit
         for (Map.Entry<String, Set<String>> e : DOMAIN_SKILLS.entrySet()) {
             String dom = e.getKey();
             Set<String> sks = e.getValue();
-            long count = sks.stream().filter(txt.toLowerCase()::contains).count();
-            domains.put(dom, (int)((count * 100.0) / sks.size()));
+            long cnt = sks.stream().filter(txt.toLowerCase()::contains).count();
+            domains.put(dom, (int)((cnt * 100.0) / sks.size()));
         }
 
-        /* --- ROLE FIT --- */
+        // role fit
         for (Map.Entry<String, Set<String>> e : ROLE_SKILLS.entrySet()) {
             String role = e.getKey();
             Set<String> sks = e.getValue();
-            long count = sks.stream().filter(txt.toLowerCase()::contains).count();
-            roles.put(role, (int)((count * 100.0) / sks.size()));
+            long cnt = sks.stream().filter(txt.toLowerCase()::contains).count();
+            roles.put(role, (int)((cnt * 100.0) / sks.size()));
         }
 
-        /* --- SCORING LOGIC --- */
-        double ratio = must.isEmpty() ? 0 : weighted_sc / (must.size() * 2.0); 
-        int sc_sk = (int) (ratio * 70);
+        // scoring
+        double ratio = must.isEmpty() ? 0 : wSc / (must.size() * 2.0);
+        int scSk = (int) (ratio * 70);
 
-        int sc_exp = 0;
-        int[] range = calc_range(jd);
+        int scExp = 0;
+        int[] range = calcRange(jd);
         if (range != null) {
             int min = range[0], max = range[1];
-            if (exp >= min && exp <= max) sc_exp = 25;
-            else if (exp >= min - 1 && exp <= max + 1) sc_exp = 18;
-            else if (exp >= min) sc_exp = 12;
-            else sc_exp = 5;
+            if (exp >= min && exp <= max) scExp = 25;
+            else if (exp >= min - 1 && exp <= max + 1) scExp = 18;
+            else if (exp >= min) scExp = 12;
+            else scExp = 5;
         } else {
-            if (exp >= 5) sc_exp = 25;
-            else if (exp >= 3) sc_exp = 18;
-            else if (exp >= 1) sc_exp = 10;
+            if (exp >= 5) scExp = 25;
+            else if (exp >= 3) scExp = 18;
+            else if (exp >= 1) scExp = 10;
         }
 
-        int boost_role = 0;
-        String l_txt = txt.toLowerCase();
-        String l_tit = jd.split("\n")[0].toLowerCase().replace(" engineer", "").replace(" developer", "").trim();
-        
-        if (!l_tit.isEmpty() && l_txt.contains(l_tit)) {
-            boost_role = 35;
+        int boostRole = 0;
+        String lTxt = txt.toLowerCase();
+        String lTit = jd.split("\n")[0].toLowerCase().replace(" engineer", "").replace(" developer", "").trim();
+
+        if (!lTit.isEmpty() && lTxt.contains(lTit)) {
+            boostRole = 35;
         } else {
-            for (String r_nm : ROLE_SKILLS.keySet()) {
-                String clean = r_nm.toLowerCase().replace(" engineer", "").replace(" developer", "");
-                if (l_txt.contains(clean) && jd.toLowerCase().contains(r_nm.toLowerCase())) {
-                    boost_role = 25;
+            for (String rNm : ROLE_SKILLS.keySet()) {
+                String clean = rNm.toLowerCase().replace(" engineer", "").replace(" developer", "");
+                if (lTxt.contains(clean) && jd.toLowerCase().contains(rNm.toLowerCase())) {
+                    boostRole = 25;
                     break;
                 }
             }
         }
 
-        int boost_rec = 0;
+        int boostRec = 0;
         if (!hits.isEmpty()) {
-            long r_hits = hits.stream().filter(l_txt::contains).count();
-            boost_rec = (int) Math.min(10, (r_hits * 10.0) / hits.size());
+            long rHits = hits.stream().filter(lTxt::contains).count();
+            boostRec = (int) Math.min(10, (rHits * 10.0) / hits.size());
         }
 
-        int core_sc = 0;
+        int coreSc = 0;
         Set<String> terms = DOMAIN_SKILLS.get("General Tech & Roles");
-        long count = terms.stream().filter(l_txt::contains).count();
-        if (count > 0) core_sc = (int) Math.min(15, 5 + (count * 2));
+        long cnt = terms.stream().filter(lTxt::contains).count();
+        if (cnt > 0) coreSc = (int) Math.min(15, 5 + (cnt * 2));
 
-        String job_dom = "General Tech & Roles";
-        int best_m = 0;
+        String jobDom = "General Tech & Roles";
+        int bestM = 0;
         for (String d : DOMAIN_SKILLS.keySet()) {
             if (d.equals("General Tech & Roles") || d.equals("Impact & Leadership")) continue;
             long m = DOMAIN_SKILLS.get(d).stream().filter(jd.toLowerCase()::contains).count();
-            if (m > best_m) { best_m = (int) m; job_dom = d; }
+            if (m > bestM) { bestM = (int) m; jobDom = d; }
         }
-        
-        int dom_fit = domains.getOrDefault(job_dom, 0);
-        int sc_dom = (dom_fit > 0) ? (5 + (dom_fit / 4)) : 0;
 
-        int boost_lead = 0;
-        Set<String> i_terms = DOMAIN_SKILLS.get("Impact & Leadership");
-        long i_count = i_terms.stream().filter(l_txt::contains).count();
-        if (i_count > 0) boost_lead = (int) Math.min(15, i_count * 3);
+        int domFit = domains.getOrDefault(jobDom, 0);
+        int scDom = (domFit > 0) ? (5 + (domFit / 4)) : 0;
 
-        int penalty = Math.min(10, miss_must.size() * 1);
+        int boostLead = 0;
+        Set<String> iTerms = DOMAIN_SKILLS.get("Impact & Leadership");
+        long iCnt = iTerms.stream().filter(lTxt::contains).count();
+        if (iCnt > 0) boostLead = (int) Math.min(15, iCnt * 3);
 
-        int sc = sc_sk + sc_exp + boost_role + boost_rec + sc_dom + core_sc + boost_lead - penalty;
-        
-        if (dom_fit < 10 && !job_dom.equals("General Tech & Roles")) sc = Math.min(sc, 45); 
+        int penalty = Math.min(10, missMust.size() * 1);
+
+        int sc = scSk + scExp + boostRole + boostRec + scDom + coreSc + boostLead - penalty;
+
+        if (domFit < 10 && !jobDom.equals("General Tech & Roles")) sc = Math.min(sc, 45);
         if (!hits.isEmpty() && sc < 15) sc = 15;
         sc = Math.max(0, Math.min(sc, 100));
 
-        /* --- RECS --- */
+        // recommendations
         recs.add("Analyzed " + must.size() + " must-have skills");
         recs.add("Found " + hits.size() + " matches in key resume sections");
         recs.add("Experience: " + exp + " years total");
-        recs.add("Missing mandatory: " + miss_must.size());
+        recs.add("Missing mandatory: " + missMust.size());
 
-        SkillGapPriority p = (miss_must.size() >= 4) ? SkillGapPriority.HIGH : (miss_must.size() >= 2 ? SkillGapPriority.MEDIUM : SkillGapPriority.LOW);
+        SkillGapPriority p = (missMust.size() >= 4) ? SkillGapPriority.HIGH : (missMust.size() >= 2 ? SkillGapPriority.MEDIUM : SkillGapPriority.LOW);
 
         List<String> roadmap = new ArrayList<>();
-        if (miss_must.isEmpty()) {
+        if (missMust.isEmpty()) {
             roadmap.add("🎯 You match all required skills for this role!");
             roadmap.add("💡 Focus on polishing your portfolio and preparing for system design interviews.");
             roadmap.add("📝 Tailor your resume summary to highlight your strongest matching skills.");
         } else {
             roadmap.add("🗺️ Your personalized learning path to land this role:");
             int step = 1;
-            for (String skill : miss_must.stream().limit(6).collect(Collectors.toList())) {
+            for (String skill : missMust.stream().limit(6).collect(Collectors.toList())) {
                 String s = skill.toLowerCase();
                 String advice;
                 // Java ecosystem
@@ -296,22 +294,23 @@ public class ResumeScorer {
                 roadmap.add(advice);
                 step++;
             }
-            if (miss_must.size() > 6) {
-                roadmap.add("📌 " + (miss_must.size() - 6) + " more skills to cover: " +
-                    miss_must.stream().skip(6).collect(Collectors.joining(", ")));
+            if (missMust.size() > 6) {
+                roadmap.add("📌 " + (missMust.size() - 6) + " more skills to cover: " +
+                    missMust.stream().skip(6).collect(Collectors.joining(", ")));
             }
             roadmap.add("⏱️ Estimated time to close this gap: " +
                 (p == SkillGapPriority.HIGH ? "3–5 months" : p == SkillGapPriority.MEDIUM ? "4–8 weeks" : "1–2 weeks"));
         }
 
         return new ResumeScore(
-                fn, sc, exp, hits, miss, miss_must,
+                fn, sc, exp, hits, miss, missMust,
                 "Human-readable deep scan completed.",
                 100, Set.of(), p, roadmap, roles, domains, recs
         );
     }
 
-    private int calc_exp(String txt) {
+    // calc experience years
+    private int calcExp(String txt) {
         Pattern p = Pattern.compile("(\\d+)\\s*(years?|yrs?|months?)");
         Matcher m = p.matcher(txt);
         int mo = 0;
@@ -324,14 +323,16 @@ public class ResumeScorer {
         return mo / 12;
     }
 
-    private int[] calc_range(String jd) {
+    // calc exp range from jd
+    private int[] calcRange(String jd) {
         Pattern p = Pattern.compile("(\\d+)-(\\d+)\\s*(years?|yrs?)");
         Matcher m = p.matcher(jd.toLowerCase());
         if (m.find()) return new int[]{Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2))};
         return null;
     }
 
-    private Set<String> get_musts(String jd) {
+    // get must-have skills
+    private Set<String> getMust(String jd) {
         Set<String> must = new HashSet<>();
         String low = jd.toLowerCase();
         for (Set<String> sks : DOMAIN_SKILLS.values()) {
